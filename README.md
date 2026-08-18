@@ -77,7 +77,8 @@ docker compose up --build
 ```
 
 That brings up Postgres, Redis and the API on <http://localhost:8000>, running migrations
-on the way up.
+on the way up. Open <http://localhost:8000/app/>, create an account, and shorten
+something — the redirect, the click counter and the QR code all work locally.
 
 Without Docker:
 
@@ -112,7 +113,9 @@ Redis database 15 is used for tests and is flushed between them — do not point
 ## Deploying
 
 [fly.toml](fly.toml) is set up for Fly.io, including a release command that runs migrations
-before new machines take traffic. It needs a database, a Redis, and a real secret:
+before new machines take traffic. It needs a database, a Redis, and a real secret —
+roughly the following, though check [Fly's own docs](https://fly.io/docs/) for the
+current command names:
 
 ```bash
 fly launch --no-deploy
