@@ -4,7 +4,7 @@ A URL shortener API where the interesting part is not the shortening — it is e
 around it: cache-first redirects, per-user rate limiting, and click analytics that never
 sit in the request path.
 
-Built with FastAPI, PostgreSQL and Redis.
+Built with FastAPI, PostgreSQL and Redis, with a dashboard on top of the public API.
 
 [![CI](https://github.com/Nappuccino-tlg/linkly/actions/workflows/ci.yml/badge.svg)](https://github.com/Nappuccino-tlg/linkly/actions/workflows/ci.yml)
 ![Python](https://img.shields.io/badge/python-3.12-blue)
@@ -53,8 +53,21 @@ The redirect path is the hot path, so it is the one that got the attention:
 | `GET` | `/api/links/{code}/qr` | QR code for the short link, as PNG or SVG |
 | `GET` | `/{code}` | The redirect itself |
 | `GET` | `/healthz` · `/readyz` | Liveness, and readiness that checks Postgres and Redis |
+| `GET` | `/app/` | The dashboard |
 
-Interactive docs at `/docs` once running.
+Interactive docs at `/docs` once running, and the dashboard at `/app/`.
+
+## The dashboard
+
+`/app/` is three files — one HTML page, one stylesheet, one script — served straight
+from the API container. No bundler, no `node_modules`, no build step in CI, and nothing
+to keep in sync at deploy time.
+
+It is deliberately just another API client: it signs in for a token and then calls the
+same public endpoints anyone else would. Nothing is exposed to it that is not already
+documented at `/docs`. The one place that shape shows through is the QR code — the
+endpoint is owner-only, so an `<img src>` cannot fetch it (there is no way to attach a
+bearer token to an image request) and the page fetches it as a blob instead.
 
 ## Running it
 
@@ -136,6 +149,14 @@ is up and must never depend on Postgres, or a database blip restarts healthy con
 Readiness asks whether this instance can serve traffic right now, and does check both
 dependencies, so a rolling deploy waits for an instance that actually works.
 
+**Unhandled failures still hand back a request id.** Without a catch-all handler, an
+unreachable database returns a bare plain-text 500 — no id, nothing for a user to
+quote. The traceback goes to the log, correlated by id; the reply carries the id and
+nothing else about what went wrong.
+
+**`/favicon.ico` has its own route.** Browsers request it unprompted, and without one it
+falls through to `/{code}` and costs a database lookup on every page view.
+
 **Raw IP addresses are never stored.** Unique-visitor counts come from a salted SHA-256 of
 the address, which is enough to count distinct people and not enough to identify them.
 
@@ -155,8 +176,8 @@ otherwise someone could claim `/docs` and take out the API documentation.
 
 - [x] QR code generation per link (PNG and SVG)
 - [x] Repoint or disable a link without changing its code
+- [x] Dashboard at `/app/`, no build step
 - [ ] Aggregate click rollups so stats stay fast past a few million rows
-- [ ] A small React dashboard on top of the API
 
 ## License
 

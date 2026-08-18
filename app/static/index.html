@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Linkly</title>
+<link rel="icon" href="/favicon.ico" type="image/svg+xml">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<main>
+  <header>
+    <h1>Linkly</h1>
+    <p>Short links with click analytics</p>
+  </header>
+
+  <div id="message" class="msg hidden"></div>
+
+  <section id="auth" class="card hidden">
+    <h2>Sign in</h2>
+    <div class="field">
+      <label for="email">Email</label>
+      <input id="email" type="email" autocomplete="email" placeholder="you@example.com">
+    </div>
+    <div class="field">
+      <label for="password">Password</label>
+      <input id="password" type="password" autocomplete="current-password" placeholder="at least 8 characters">
+    </div>
+    <div class="row">
+      <button id="sign-in">Sign in</button>
+      <button id="sign-up" class="ghost">Create account</button>
+    </div>
+  </section>
+
+  <section id="dashboard" class="hidden">
+    <div class="card">
+      <h2>New link</h2>
+      <div class="field">
+        <label for="target">Destination URL</label>
+        <input id="target" type="url" placeholder="https://example.com/a/very/long/address">
+      </div>
+      <div class="row">
+        <div>
+          <label for="code">Custom code (optional)</label>
+          <input id="code" type="text" placeholder="my-talk">
+        </div>
+        <div style="display:flex; align-items:flex-end">
+          <button id="create">Shorten</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="tabs">
+        <h2 style="flex:1; margin:0">Your links</h2>
+        <button id="sign-out" class="ghost">Sign out</button>
+      </div>
+      <div id="links"><p class="muted">Loading…</p></div>
+    </div>
+
+    <div id="detail" class="card hidden"></div>
+  </section>
+</main>
+<script src="app.js"></script>
+</body>
+</html>

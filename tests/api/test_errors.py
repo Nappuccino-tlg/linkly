@@ -42,3 +42,34 @@ async def test_credentials_in_a_target_are_refused(auth_client):
         "/api/links", json={"target_url": "http://apple.com@evil.example/"}
     )
     assert response.status_code == 422
+
+
+async def test_the_request_id_header_is_sent_exactly_once(client):
+    """The handlers set it and the middleware sets it; only one may reach the wire."""
+    for path in ("/healthz", "/auth/me", "/nope"):
+        response = await client.get(path, follow_redirects=False)
+        assert "," not in response.headers["x-request-id"], path
+
+
+async def test_an_unexpected_failure_still_hands_back_a_request_id(tolerant_client, monkeypatch):
+    from app.routers import auth
+
+    await tolerant_client.post(
+        "/auth/register", json={"email": "boom@example.com", "password": "supersecret123"}
+    )
+
+    def explode(*_args, **_kwargs):
+        raise RuntimeError("pretend the database fell over")
+
+    monkeypatch.setattr(auth, "verify_password", explode)
+
+    response = await tolerant_client.post(
+        "/auth/token", data={"username": "boom@example.com", "password": "supersecret123"}
+    )
+    assert response.status_code == 500
+
+    error = response.json()["error"]
+    assert error["message"] == "Internal server error"
+    assert error["request_id"] == response.headers["x-request-id"]
+    # The cause belongs in the log, not in the reply.
+    assert "database fell over" not in response.text

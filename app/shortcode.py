@@ -5,7 +5,9 @@ ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 DEFAULT_LENGTH = 7
 
 # Codes the router itself owns, so a vanity code can never shadow a real route.
-RESERVED_CODES = frozenset({"api", "auth", "docs", "redoc", "openapi.json", "healthz", "static"})
+RESERVED_CODES = frozenset(
+    {"api", "app", "auth", "docs", "redoc", "openapi.json", "healthz", "readyz", "static"}
+)
 
 
 def generate_code(length: int = DEFAULT_LENGTH) -> str:

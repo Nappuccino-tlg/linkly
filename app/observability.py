@@ -18,6 +18,11 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 request_id: ContextVar[str | None] = ContextVar("request_id", default=None)
 
+# Also stashed on the ASGI scope under this key. The contextvar is convenient for log
+# records, but Starlette's own 500 handler runs outside this middleware, by which point
+# the contextvar has been reset -- and a 500 is exactly when the id matters most.
+SCOPE_KEY = "linkly.request_id"
+
 logger = logging.getLogger("linkly.access")
 
 # Client-supplied ids are echoed into logs, so they are constrained before use.
@@ -77,6 +82,7 @@ class RequestContextMiddleware:
         incoming = Headers(scope=scope).get("x-request-id", "")
         current = incoming if SAFE_REQUEST_ID.match(incoming) else uuid.uuid4().hex
         token = request_id.set(current)
+        scope[SCOPE_KEY] = current
 
         started = time.perf_counter()
         status_code = 500
@@ -85,7 +91,12 @@ class RequestContextMiddleware:
             nonlocal status_code
             if message["type"] == "http.response.start":
                 status_code = message["status"]
-                message.setdefault("headers", []).append((b"x-request-id", current.encode()))
+                headers = message.setdefault("headers", [])
+                # The error handlers set this themselves, because on the 500 path the
+                # response is built above this middleware. Appending blindly would send
+                # the header twice on every other path.
+                if not any(key.lower() == b"x-request-id" for key, _ in headers):
+                    headers.append((b"x-request-id", current.encode()))
             await send(message)
 
         try:

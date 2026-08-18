@@ -58,3 +58,17 @@ async def auth_client(client):
         headers={"Authorization": f"Bearer {token}"},
     ) as ac:
         yield ac
+
+
+@pytest.fixture
+async def tolerant_client():
+    """A client that lets server errors come back as 500s instead of re-raising them.
+
+    The default transport re-raises, which is right for most tests but makes the 500
+    handler itself untestable.
+    """
+    async with AsyncClient(
+        transport=ASGITransport(app=app, raise_app_exceptions=False),
+        base_url="http://testserver",
+    ) as ac:
+        yield ac

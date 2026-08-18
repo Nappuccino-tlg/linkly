@@ -12,3 +12,6 @@ dist/
 build/
 .idea/
 .vscode/
+
+# Local dev-server config for the Claude Code preview pane
+.claude/
