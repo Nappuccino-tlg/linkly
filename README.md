@@ -95,6 +95,22 @@ pytest
 Redis database 15 is used for tests and is flushed between them — do not point
 `REDIS_URL` at anything you care about.
 
+## Deploying
+
+[fly.toml](fly.toml) is set up for Fly.io, including a release command that runs migrations
+before new machines take traffic. It needs a database, a Redis, and a real secret:
+
+```bash
+fly launch --no-deploy
+fly postgres create --name linkly-db && fly postgres attach linkly-db
+fly redis create
+fly secrets set JWT_SECRET="$(python -c 'import secrets; print(secrets.token_urlsafe(48))')" REDIS_URL="<from fly redis create>"
+fly deploy
+```
+
+`ENVIRONMENT=production` makes the app refuse to start on a default or short `JWT_SECRET`,
+so a forgotten secret fails the deploy instead of shipping forgeable tokens.
+
 ## Design notes
 
 **Code collisions are handled by the database, not by a check.** `generate_code()` produces

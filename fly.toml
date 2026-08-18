@@ -1,0 +1,33 @@
+# Deploy target for Fly.io. Rename `app` if the name is taken, and keep BASE_URL in sync
+# with it -- short links are built from that value, so a stale one hands out dead links.
+app = "linkly"
+primary_region = "fra"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  ENVIRONMENT = "production"
+  BASE_URL = "https://linkly.fly.dev"
+
+[deploy]
+  # Runs once per release, before the new machines take traffic.
+  release_command = "alembic upgrade head"
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [[http_service.checks]]
+    path = "/healthz"
+    method = "GET"
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "10s"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
