@@ -6,8 +6,7 @@ sit in the request path.
 
 Built with FastAPI, PostgreSQL and Redis.
 
-<!-- Replace OWNER with your GitHub username once the repo is pushed. -->
-[![CI](https://github.com/OWNER/linkly/actions/workflows/ci.yml/badge.svg)](https://github.com/OWNER/linkly/actions/workflows/ci.yml)
+[![CI](https://github.com/Nappuccino-tlg/linkly/actions/workflows/ci.yml/badge.svg)](https://github.com/Nappuccino-tlg/linkly/actions/workflows/ci.yml)
 ![Python](https://img.shields.io/badge/python-3.12-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
