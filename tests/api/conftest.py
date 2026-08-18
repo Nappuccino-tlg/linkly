@@ -1,0 +1,50 @@
+"""Fixtures backed by a real Postgres and a real Redis.
+
+Unique indexes, SQL aggregation and TTL behaviour are most of what these tests check,
+and none of that survives a mock.
+"""
+
+import pytest
+from httpx import ASGITransport, AsyncClient
+from sqlalchemy import text
+
+from app.cache import redis
+from app.db import engine
+from app.main import app
+from app.models import Base
+
+
+@pytest.fixture(scope="package", autouse=True)
+async def _schema():
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
+        await conn.run_sync(Base.metadata.create_all)
+    yield
+    await engine.dispose()
+
+
+@pytest.fixture(autouse=True)
+async def _clean_state():
+    """Each test starts with empty tables, an empty cache and reset rate-limit counters."""
+    yield
+    async with engine.begin() as conn:
+        await conn.execute(text("TRUNCATE users, links, clicks RESTART IDENTITY CASCADE"))
+    await redis.flushdb()
+
+
+@pytest.fixture
+async def client():
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as ac:
+        yield ac
+
+
+@pytest.fixture
+async def auth_client(client):
+    """A client already registered and carrying a bearer token."""
+    email = "owner@example.com"
+    password = "supersecret123"
+    await client.post("/auth/register", json={"email": email, "password": password})
+    response = await client.post("/auth/token", data={"username": email, "password": password})
+    token = response.json()["access_token"]
+    client.headers["Authorization"] = f"Bearer {token}"
+    return client

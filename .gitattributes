@@ -1,0 +1,3 @@
+* text=auto eol=lf
+*.png binary
+*.mako text eol=lf
