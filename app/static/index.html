@@ -4,6 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'self'; img-src 'self' blob:; style-src 'self'; script-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'">
 <title>Linkly</title>
 <link rel="icon" href="/favicon.ico" type="image/svg+xml">
 <link rel="stylesheet" href="styles.css">
@@ -45,7 +47,7 @@
           <label for="code">Custom code (optional)</label>
           <input id="code" type="text" placeholder="my-talk">
         </div>
-        <div style="display:flex; align-items:flex-end">
+        <div class="end">
           <button id="create">Shorten</button>
         </div>
       </div>
@@ -53,7 +55,7 @@
 
     <div class="card">
       <div class="tabs">
-        <h2 style="flex:1; margin:0">Your links</h2>
+        <h2 class="grow flush">Your links</h2>
         <button id="sign-out" class="ghost">Sign out</button>
       </div>
       <div id="links"><p class="muted">Loading…</p></div>

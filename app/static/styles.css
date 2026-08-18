@@ -94,6 +94,9 @@ button.link { border: none; background: none; color: var(--accent); padding: 0.2
 button.danger { border: none; background: none; color: var(--danger); padding: 0.2rem 0.4rem; }
 
 .tabs { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
+.end { display: flex; align-items: flex-end; }
+.grow { flex: 1; }
+.flush { margin: 0; }
 
 .item {
   display: flex;

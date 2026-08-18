@@ -29,3 +29,17 @@ async def test_the_dashboard_path_cannot_be_claimed_as_a_code(auth_client):
         "/api/links", json={"target_url": "https://example.com", "custom_code": "app"}
     )
     assert response.status_code == 409
+
+
+async def test_the_dashboard_declares_a_strict_policy(client):
+    """The page holds a bearer token, so it should not be able to load foreign script."""
+    body = (await client.get("/app/")).text
+    assert "Content-Security-Policy" in body
+    assert "script-src 'self'" in body
+    # The QR code arrives as a blob, so that one source has to be allowed.
+    assert "img-src 'self' blob:" in body
+
+
+async def test_the_dashboard_carries_no_inline_styles(client):
+    """Inline style attributes would need 'unsafe-inline', which defeats the policy."""
+    assert 'style="' not in (await client.get("/app/")).text

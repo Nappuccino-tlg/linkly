@@ -38,9 +38,9 @@ jobs:
       JWT_SECRET: ci-secret-not-used-outside-github-actions
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
           cache: pip
@@ -61,4 +61,4 @@ jobs:
           DATABASE_URL: postgresql+asyncpg://linkly:linkly@localhost:5432/linkly_test
 
       - name: Test
-        run: pytest
+        run: pytest --cov-fail-under=85

@@ -97,6 +97,8 @@ class RequestContextMiddleware:
                 # the header twice on every other path.
                 if not any(key.lower() == b"x-request-id" for key, _ in headers):
                     headers.append((b"x-request-id", current.encode()))
+                # Stops a browser from deciding a stored target_url is really HTML.
+                headers.append((b"x-content-type-options", b"nosniff"))
             await send(message)
 
         try:

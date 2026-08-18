@@ -31,3 +31,10 @@ async def test_a_junk_request_id_is_replaced(client):
 async def test_an_overlong_request_id_is_replaced(client):
     response = await client.get("/healthz", headers={"x-request-id": "x" * 200})
     assert len(response.headers["x-request-id"]) <= 64
+
+
+async def test_responses_refuse_content_type_sniffing(client):
+    """A stored target_url is attacker-controlled text; browsers must not guess at it."""
+    for path in ("/healthz", "/app/", "/favicon.ico"):
+        response = await client.get(path)
+        assert response.headers["x-content-type-options"] == "nosniff", path
