@@ -47,10 +47,12 @@ The redirect path is the hot path, so it is the one that got the attention:
 | `POST` | `/api/links` | Create a short link (optional vanity code and expiry) |
 | `GET` | `/api/links` | List your links, newest first |
 | `GET` | `/api/links/{code}` | Link detail |
+| `PATCH` | `/api/links/{code}` | Repoint, expire or disable a link |
 | `DELETE` | `/api/links/{code}` | Delete a link and invalidate its cache entry |
 | `GET` | `/api/links/{code}/stats` | Clicks, unique visitors, daily buckets, top referrers |
 | `GET` | `/api/links/{code}/qr` | QR code for the short link, as PNG or SVG |
 | `GET` | `/{code}` | The redirect itself |
+| `GET` | `/healthz` · `/readyz` | Liveness, and readiness that checks Postgres and Redis |
 
 Interactive docs at `/docs` once running.
 
@@ -117,6 +119,23 @@ a random base62 string, and a check-then-insert would still let two concurrent r
 pick the same code. The unique index on `links.code` is the actual guarantee; the handler
 catches the integrity error and retries with a fresh code.
 
+**A shortener is an open redirector, so the target is checked.** `app/urlguard.py`
+refuses loopback, private, link-local and reserved addresses — including the cloud
+metadata endpoint at `169.254.169.254` — and refuses URLs carrying credentials, because
+`http://apple.com@evil.example` reads as Apple to everyone except the browser. It does
+this without resolving hostnames, so the guard cannot itself be used to make the server
+issue outbound requests. Catching a domain that *resolves* somewhere private needs
+resolve-then-pin at redirect time; this is the floor, not the ceiling.
+
+**Every response carries an `X-Request-ID`,** and every JSON log line for that request
+carries the same value. A report of "it broke around 14:02" becomes one grep. Ids
+supplied by the client are constrained before being echoed, since they land in logs.
+
+**`/healthz` and `/readyz` are different questions.** Liveness asks whether the process
+is up and must never depend on Postgres, or a database blip restarts healthy containers.
+Readiness asks whether this instance can serve traffic right now, and does check both
+dependencies, so a rolling deploy waits for an instance that actually works.
+
 **Raw IP addresses are never stored.** Unique-visitor counts come from a salted SHA-256 of
 the address, which is enough to count distinct people and not enough to identify them.
 
@@ -135,7 +154,7 @@ otherwise someone could claim `/docs` and take out the API documentation.
 ## Roadmap
 
 - [x] QR code generation per link (PNG and SVG)
-- [ ] Bulk import from CSV
+- [x] Repoint or disable a link without changing its code
 - [ ] Aggregate click rollups so stats stay fast past a few million rows
 - [ ] A small React dashboard on top of the API
 

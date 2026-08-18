@@ -78,3 +78,35 @@ async def test_stats_count_unique_visitors_separately_from_clicks(auth_client, c
 async def test_stats_are_owner_only(auth_client, client):
     await _make_link(auth_client, code="secret")
     assert (await client.get("/api/links/secret/stats")).status_code == 401
+
+
+async def test_repointing_a_link_takes_effect_immediately(auth_client, client):
+    """The cached copy must be dropped on update, or the old target keeps being served."""
+    await _make_link(auth_client, target="https://first.example", code="repoint")
+
+    first = await client.get("/repoint", follow_redirects=False)
+    assert first.headers["location"] == "https://first.example"
+
+    await auth_client.patch("/api/links/repoint", json={"target_url": "https://second.example"})
+
+    second = await client.get("/repoint", follow_redirects=False)
+    assert second.headers["location"] == "https://second.example"
+
+
+async def test_deactivating_a_link_stops_the_redirect(auth_client, client):
+    await _make_link(auth_client, code="switchoff")
+    assert (await client.get("/switchoff", follow_redirects=False)).status_code == 307
+
+    await auth_client.patch("/api/links/switchoff", json={"is_active": False})
+
+    assert (await client.get("/switchoff", follow_redirects=False)).status_code == 404
+
+
+async def test_reactivating_a_link_brings_it_back(auth_client, client):
+    await _make_link(auth_client, code="backon")
+    await auth_client.patch("/api/links/backon", json={"is_active": False})
+    assert (await client.get("/backon", follow_redirects=False)).status_code == 404
+
+    await auth_client.patch("/api/links/backon", json={"is_active": True})
+
+    assert (await client.get("/backon", follow_redirects=False)).status_code == 307

@@ -12,7 +12,15 @@ from app.deps import client_ip, get_current_user
 from app.models import Click, Link, User
 from app.qrcodes import MAX_BOX_SIZE, MEDIA_TYPES, MIN_BOX_SIZE, QrFormat
 from app.ratelimit import enforce_limit
-from app.schemas import DailyClicks, LinkCreate, LinkOut, LinkStats, ReferrerCount
+from app.schemas import (
+    DailyClicks,
+    LinkCreate,
+    LinkOut,
+    LinkPage,
+    LinkStats,
+    LinkUpdate,
+    ReferrerCount,
+)
 from app.shortcode import RESERVED_CODES, generate_code
 
 router = APIRouter(prefix="/api/links", tags=["links"])
@@ -91,13 +99,16 @@ async def create_link(
     )
 
 
-@router.get("", response_model=list[LinkOut])
+@router.get("", response_model=LinkPage)
 async def list_links(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-) -> list[LinkOut]:
+) -> LinkPage:
+    # The total comes back with the page: without it a client cannot render "page 3 of 7"
+    # or know whether to show a next button, and would have to guess by over-fetching.
+    total = await session.scalar(select(func.count(Link.id)).where(Link.owner_id == user.id))
     rows = await session.scalars(
         select(Link)
         .where(Link.owner_id == user.id)
@@ -105,7 +116,12 @@ async def list_links(
         .limit(limit)
         .offset(offset)
     )
-    return [_to_out(link) for link in rows]
+    return LinkPage(
+        items=[_to_out(link) for link in rows],
+        total=total or 0,
+        limit=limit,
+        offset=offset,
+    )
 
 
 async def _owned_link(code: str, user: User, session: AsyncSession) -> Link:
@@ -122,6 +138,34 @@ async def get_link(
     session: AsyncSession = Depends(get_session),
 ) -> LinkOut:
     return _to_out(await _owned_link(code, user, session))
+
+
+@router.patch("/{code}", response_model=LinkOut)
+async def update_link(
+    code: str,
+    payload: LinkUpdate,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> LinkOut:
+    """Repoint, expire or disable a link without changing the code people already have."""
+    link = await _owned_link(code, user, session)
+
+    changes = payload.model_dump(exclude_unset=True)
+    if "target_url" in changes:
+        _reject_self_reference(changes["target_url"])
+        link.target_url = changes["target_url"]
+    if "is_active" in changes:
+        link.is_active = changes["is_active"]
+    if "expires_at" in changes:
+        link.expires_at = changes["expires_at"]
+
+    await session.commit()
+    await session.refresh(link)
+
+    # Every one of those fields decides where the code resolves, and the cached copy is
+    # now wrong. Dropping it is what makes the change take effect immediately.
+    await cache.invalidate(code)
+    return _to_out(link)
 
 
 @router.delete("/{code}", status_code=status.HTTP_204_NO_CONTENT)

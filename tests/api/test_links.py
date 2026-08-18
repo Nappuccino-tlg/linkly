@@ -62,8 +62,10 @@ async def test_list_returns_only_my_links_newest_first(auth_client):
 
     response = await auth_client.get("/api/links")
     assert response.status_code == 200
-    codes = [link["code"] for link in response.json()]
-    assert codes == ["mine2", "mine1"]
+
+    page = response.json()
+    assert [link["code"] for link in page["items"]] == ["mine2", "mine1"]
+    assert page["total"] == 2
 
 
 async def test_another_user_cannot_see_my_link(auth_client, client):
@@ -152,3 +154,79 @@ async def test_qr_is_owner_only(auth_client, client):
     )
 
     assert (await client.get("/api/links/qr5/qr")).status_code == 401
+
+
+async def test_page_reports_the_total_beyond_the_current_slice(auth_client):
+    for i in range(5):
+        await auth_client.post(
+            "/api/links", json={"target_url": "https://example.com", "custom_code": f"page{i}"}
+        )
+
+    page = (await auth_client.get("/api/links", params={"limit": 2})).json()
+    assert len(page["items"]) == 2
+    assert page["total"] == 5
+    assert page["limit"] == 2
+    assert page["offset"] == 0
+
+
+async def test_offset_walks_through_the_pages(auth_client):
+    for i in range(3):
+        await auth_client.post(
+            "/api/links", json={"target_url": "https://example.com", "custom_code": f"walk{i}"}
+        )
+
+    first = (await auth_client.get("/api/links", params={"limit": 2, "offset": 0})).json()
+    second = (await auth_client.get("/api/links", params={"limit": 2, "offset": 2})).json()
+
+    codes = [link["code"] for link in first["items"] + second["items"]]
+    assert codes == ["walk2", "walk1", "walk0"]
+
+
+async def test_patch_repoints_a_link(auth_client):
+    await auth_client.post(
+        "/api/links", json={"target_url": "https://old.example", "custom_code": "moved"}
+    )
+
+    response = await auth_client.patch(
+        "/api/links/moved", json={"target_url": "https://new.example"}
+    )
+    assert response.status_code == 200
+    assert response.json()["target_url"] == "https://new.example"
+    assert response.json()["code"] == "moved"
+
+
+async def test_patch_leaves_untouched_fields_alone(auth_client):
+    await auth_client.post(
+        "/api/links", json={"target_url": "https://keep.example", "custom_code": "partial"}
+    )
+
+    response = await auth_client.patch("/api/links/partial", json={"is_active": False})
+    assert response.status_code == 200
+    assert response.json()["target_url"] == "https://keep.example"
+    assert response.json()["is_active"] is False
+
+
+async def test_patch_rejects_an_unsafe_target(auth_client):
+    await auth_client.post(
+        "/api/links", json={"target_url": "https://ok.example", "custom_code": "guarded"}
+    )
+
+    response = await auth_client.patch(
+        "/api/links/guarded", json={"target_url": "http://169.254.169.254/"}
+    )
+    assert response.status_code == 422
+
+
+async def test_patch_is_owner_only(auth_client, client):
+    await auth_client.post(
+        "/api/links", json={"target_url": "https://example.com", "custom_code": "notyours"}
+    )
+
+    response = await client.patch("/api/links/notyours", json={"is_active": False})
+    assert response.status_code == 401
+
+
+async def test_patch_on_a_missing_link_is_a_404(auth_client):
+    assert (
+        await auth_client.patch("/api/links/ghost", json={"is_active": False})
+    ).status_code == 404
