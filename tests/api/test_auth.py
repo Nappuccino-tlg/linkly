@@ -48,7 +48,7 @@ async def test_login_for_unknown_email_looks_identical_to_wrong_password(client)
         "/auth/token", data={"username": "ghost@example.com", "password": "supersecret123"}
     )
     assert response.status_code == 401
-    assert response.json()["detail"] == "Incorrect email or password"
+    assert response.json()["error"]["message"] == "Incorrect email or password"
 
 
 async def test_me_requires_a_token(client):

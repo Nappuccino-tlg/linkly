@@ -3,6 +3,8 @@ from datetime import date, datetime
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
+from app.urlguard import MAX_URL_LENGTH, UnsafeTargetError, check
+
 
 class UserCreate(BaseModel):
     email: EmailStr
@@ -25,16 +27,19 @@ class Token(BaseModel):
 
 
 class LinkCreate(BaseModel):
-    target_url: str = Field(max_length=2048)
+    target_url: str = Field(max_length=MAX_URL_LENGTH)
     # Optional vanity code, e.g. /my-talk
     custom_code: str | None = Field(default=None, min_length=3, max_length=16)
     expires_at: datetime | None = None
 
     @field_validator("target_url")
     @classmethod
-    def must_be_http_url(cls, value: str) -> str:
-        if not value.startswith(("http://", "https://")):
-            raise ValueError("target_url must start with http:// or https://")
+    def must_be_a_safe_target(cls, value: str) -> str:
+        """A shortener is an open redirector, so the target is checked before it is stored."""
+        try:
+            check(value)
+        except UnsafeTargetError as exc:
+            raise ValueError(str(exc)) from exc
         return value
 
     @field_validator("custom_code")
