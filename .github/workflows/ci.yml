@@ -66,4 +66,4 @@ jobs:
           DATABASE_URL: postgresql+asyncpg://linkly:linkly@localhost:5432/linkly_test
 
       - name: Test
-        run: pytest --cov-fail-under=85
+        run: pytest --cov-fail-under=95
