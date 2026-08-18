@@ -36,6 +36,10 @@ jobs:
       TEST_DATABASE_URL: postgresql+asyncpg://linkly:linkly@localhost:5432/linkly_test
       REDIS_URL: redis://localhost:6379/15
       JWT_SECRET: ci-secret-not-used-outside-github-actions
+      # coverage's default tracer loses a coroutine's frame when the event loop resumes
+      # it, so every async handler was reported as covered up to its first await and
+      # dark after it. sys.monitoring follows the resumption.
+      COVERAGE_CORE: sysmon
 
     steps:
       - uses: actions/checkout@v7
