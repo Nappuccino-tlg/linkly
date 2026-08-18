@@ -52,7 +52,7 @@ async def test_custom_code_rejects_unsafe_characters(auth_client):
     assert response.status_code == 422
 
 
-async def test_list_returns_only_my_links_newest_first(auth_client, client):
+async def test_list_returns_only_my_links_newest_first(auth_client):
     await auth_client.post(
         "/api/links", json={"target_url": "https://example.com/1", "custom_code": "mine1"}
     )

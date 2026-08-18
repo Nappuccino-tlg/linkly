@@ -166,11 +166,14 @@ async def link_stats(
         )
     ).all()
 
+    # Group on the raw column and fill in "direct" afterwards. Coalescing here instead
+    # would put a bind parameter in both the select list and the GROUP BY, and Postgres
+    # treats two placeholders as two expressions -- it cannot see that they match.
     referrer_rows = (
         await session.execute(
-            select(func.coalesce(Click.referrer, "direct"), func.count(Click.id))
+            select(Click.referrer, func.count(Click.id))
             .where(Click.link_id == link.id)
-            .group_by(func.coalesce(Click.referrer, "direct"))
+            .group_by(Click.referrer)
             .order_by(desc(func.count(Click.id)))
             .limit(10)
         )
@@ -181,7 +184,9 @@ async def link_stats(
         total_clicks=totals[0],
         unique_visitors=totals[1],
         daily=[DailyClicks(day=row[0].date(), count=row[1]) for row in daily_rows],
-        top_referrers=[ReferrerCount(referrer=row[0], count=row[1]) for row in referrer_rows],
+        top_referrers=[
+            ReferrerCount(referrer=row[0] or "direct", count=row[1]) for row in referrer_rows
+        ],
     )
 
 

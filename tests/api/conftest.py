@@ -40,11 +40,21 @@ async def client():
 
 @pytest.fixture
 async def auth_client(client):
-    """A client already registered and carrying a bearer token."""
+    """A second client, registered and carrying a bearer token.
+
+    Deliberately not the `client` fixture with a header bolted on: tests that assert an
+    endpoint is owner-only need an anonymous client alongside this one, and mutating the
+    shared instance would silently authenticate it too.
+    """
     email = "owner@example.com"
     password = "supersecret123"
     await client.post("/auth/register", json={"email": email, "password": password})
     response = await client.post("/auth/token", data={"username": email, "password": password})
     token = response.json()["access_token"]
-    client.headers["Authorization"] = f"Bearer {token}"
-    return client
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://testserver",
+        headers={"Authorization": f"Bearer {token}"},
+    ) as ac:
+        yield ac
