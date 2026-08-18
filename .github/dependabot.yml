@@ -18,3 +18,11 @@ updates:
     directory: /
     schedule:
       interval: monthly
+    ignore:
+      # The base image has to stay on the Python that CI actually tests. Moving it is a
+      # deliberate change that edits the Dockerfile, ci.yml and pyproject.toml together,
+      # not something to merge from a bot PR that touched one of the three.
+      - dependency-name: python
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor

@@ -1,3 +1,4 @@
+# Keep this in step with the version in ci.yml and requires-python in pyproject.toml.
 FROM python:3.12-slim AS builder
 
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1 PYTHONDONTWRITEBYTECODE=1

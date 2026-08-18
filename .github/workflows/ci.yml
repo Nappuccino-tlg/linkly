@@ -42,6 +42,7 @@ jobs:
 
       - uses: actions/setup-python@v7
         with:
+          # Same version as the Dockerfile base image, so what CI proves is what ships.
           python-version: "3.12"
           cache: pip
 
