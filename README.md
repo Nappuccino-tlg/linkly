@@ -126,7 +126,21 @@ python scripts/benchmark_stats.py --clicks 2000000 --days 365
 ```
 
 That seeds a link, times `/stats`, folds, times it again, and checks the two responses are
-identical — because a speedup that changed the numbers would not be a speedup.
+identical — because a speedup that changed the numbers would not be a speedup. Two million
+clicks spread over a year, against Postgres 16 in Docker on a laptop:
+
+| | raw clicks | rollups |
+|---|---|---|
+| rows `/stats` reads | 2,000,000 | 365 + 1,460 |
+| on disk | 447 MB | 384 kB |
+| `/stats` | 2,030 ms | **41 ms** |
+
+Folding all 365 days took 4.1 seconds, and the two responses came back identical.
+
+Two things that table does not say. The 447 MB does not disappear when `fold` runs — only
+`prune` reclaims it, and only past the retention window; folding buys the latency, not the
+space. And 50x is the number for one link with a year of history: the gap widens with the
+traffic, because the left column grows and the right one does not.
 
 ## Running it
 
