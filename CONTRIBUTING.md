@@ -5,6 +5,12 @@ make the thing better", not "does it match a process".
 
 ## Getting it running
 
+A Codespace is the shortest path: `.devcontainer/` brings up Postgres and Redis, installs
+the package with its dev extras, and runs the migrations, so `pytest` and `uvicorn` work
+the moment the terminal appears.
+
+Otherwise, with Docker:
+
 ```bash
 cp .env.example .env
 docker compose up --build

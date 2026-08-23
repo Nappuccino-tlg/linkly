@@ -9,6 +9,7 @@ Built with FastAPI, PostgreSQL and Redis, with a dashboard on top of the public 
 [![CI](https://github.com/Nappuccino-tlg/linkly/actions/workflows/ci.yml/badge.svg)](https://github.com/Nappuccino-tlg/linkly/actions/workflows/ci.yml)
 ![Python](https://img.shields.io/badge/python-3.12-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
+[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/Nappuccino-tlg/linkly)
 
 ![The Linkly dashboard: a link list, click totals, a daily bar chart and top referrers](docs/dashboard.png)
 
@@ -144,6 +145,14 @@ space. And 50x is the number for one link with a year of history: the gap widens
 traffic, because the left column grows and the right one does not.
 
 ## Running it
+
+The quickest way to see it work is the Codespaces button above. It brings up Postgres,
+Redis and the app, runs the migrations, and opens the dashboard — nothing to install, and
+the instance is reachable only by you. Create an account, shorten something, open the
+short link, and watch the click counter move. `pytest` works in there too, against the
+real Postgres and Redis rather than a mock.
+
+Locally, with Docker:
 
 ```bash
 cp .env.example .env
