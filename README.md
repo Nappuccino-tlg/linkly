@@ -12,7 +12,8 @@ Built with FastAPI, PostgreSQL and Redis, with a dashboard on top of the public 
 
 ![The Linkly dashboard: a link list, click totals, a daily bar chart and top referrers](docs/dashboard.png)
 
-<sub>The dashboard at `/app/`, running against sample data.</sub>
+<sub>The dashboard at `/app/`, on a local instance with a month of seeded traffic —
+13,436 clicks read back through the API, referrers merged across rollups and live rows.</sub>
 
 ---
 
