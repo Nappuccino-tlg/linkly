@@ -1,5 +1,6 @@
 import hashlib
 import time
+from collections.abc import Sequence
 
 from fastapi import HTTPException, status
 
@@ -47,22 +48,50 @@ async def enforce_limit(bucket: str, limit: int, window_seconds: int = 3600) -> 
         raise _too_many(window_seconds)
 
 
-async def check_limit(bucket: str, limit: int, window_seconds: int) -> None:
-    """Reject if the bucket is already spent, without spending from it.
+# DECR only where the window still exists. A plain DECR against a key that expired
+# between the spend and the refund would recreate it at -1 with no TTL, and that key
+# would then quietly absorb the next window's failures.
+_REFUND = """
+for _, key in ipairs(KEYS) do
+  if redis.call('EXISTS', key) == 1 then
+    redis.call('DECR', key)
+  end
+end
+return 1
+"""
 
-    Paired with record_failure for sign-in: only a failed attempt costs anything, so
-    someone signing in correctly forty times in a row is never locked out, while someone
-    guessing gets ten tries.
+_refund_script = redis.register_script(_REFUND)
+
+
+async def consume(buckets: Sequence[str], limit: int, window_seconds: int) -> None:
+    """Spend one from every bucket at once, then reject if any of them is now over.
+
+    Spending before deciding is the whole point. A limiter that reads the counter, does
+    slow work, and increments afterwards can be walked straight past: a hundred attempts
+    fired together all read the same low count and all pass, so the limit stops meaning
+    anything the moment an attacker stops being polite and sends them in parallel. INCR
+    is atomic, so those hundred attempts get a hundred distinct numbers instead.
+
+    All the buckets are spent even when one of them is what refuses the request. Refusing
+    on the cheaper key first would leave the other unspent, and the difference is worth
+    less than the extra round trip it would cost to be exact about it.
     """
-    current = await redis.get(_key(bucket, window_seconds))
-    if current is not None and int(current) >= limit:
+    async with redis.pipeline(transaction=True) as pipe:
+        for bucket in buckets:
+            key = _key(bucket, window_seconds)
+            pipe.incr(key)
+            pipe.expire(key, window_seconds)
+        replies = await pipe.execute()
+
+    # Every other reply is an INCR; the EXPIREs in between are bookkeeping.
+    if any(count > limit for count in replies[0::2]):
         raise _too_many(window_seconds)
 
 
-async def record_failure(bucket: str, window_seconds: int) -> None:
-    """Spend one from the bucket. The reject happens on the next check_limit."""
-    key = _key(bucket, window_seconds)
-    async with redis.pipeline(transaction=True) as pipe:
-        pipe.incr(key)
-        pipe.expire(key, window_seconds)
-        await pipe.execute()
+async def refund(buckets: Sequence[str], window_seconds: int) -> None:
+    """Hand back what an attempt spent, once it turns out to have been a legitimate one.
+
+    Consume-then-refund rather than check-then-consume: it costs a round trip on the
+    happy path and buys a limiter that a burst cannot walk past.
+    """
+    await _refund_script(keys=[_key(bucket, window_seconds) for bucket in buckets])

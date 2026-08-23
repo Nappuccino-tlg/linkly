@@ -237,12 +237,16 @@ falls through to `/{code}` and costs a database lookup on every page view.
 **Raw IP addresses are never stored.** Unique-visitor counts come from a salted SHA-256 of
 the address, which is enough to count distinct people and not enough to identify them.
 
-**Only failed sign-ins cost anything.** The limiter checks the budget before an attempt
-and spends from it only when the password was wrong, so someone signing in correctly forty
-times is never locked out while someone guessing gets ten tries. It is keyed on the IP and
-on the email at once: per-IP alone lets one attacker spread guesses for a single account
-across a botnet, and per-email alone lets one host walk a password list through a set of
-accounts. Neither is much use without the other.
+**Only failed sign-ins cost anything, and the budget is spent before the password is
+checked.** Those two have to go together. Reading the counter, checking a password, and
+incrementing afterwards is a limiter anyone can walk past by sending their guesses at once
+instead of in turn — a hundred parallel attempts all read the same zero and all get
+through. So an attempt spends first, atomically, and gets refunded if the password turns
+out to be right. Someone signing in correctly forty times is still never locked out;
+someone guessing still gets ten tries, however they arrange them. It is keyed on the IP
+and on the email at once: per-IP alone lets one attacker spread guesses for a single
+account across a botnet, and per-email alone lets one host walk a password list through a
+set of accounts. Neither is much use without the other.
 
 **`X-Forwarded-For` is a request header like any other.** Anyone talking to the app
 directly can put whatever they like in it, and this value keys the per-IP rate limit and

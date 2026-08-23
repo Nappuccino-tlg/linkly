@@ -1,3 +1,7 @@
+import asyncio
+
+from app import ratelimit
+from app.cache import redis
 from app.routers import auth
 
 
@@ -177,3 +181,34 @@ async def test_the_sign_in_bucket_ignores_case_and_padding_in_the_email(client, 
         headers={"x-forwarded-for": "203.0.113.21"},
     )
     assert response.status_code == 429
+
+
+async def test_a_burst_of_parallel_guesses_cannot_outrun_the_limit(client, monkeypatch):
+    """The reason the limiter spends before it decides, rather than after.
+
+    Sent one after another, eight guesses against a limit of two get two tries. Sent
+    together at a limiter that reads the counter, checks a password, and only then
+    increments, all eight read the same zero and all eight get through -- and the number
+    in the config stops describing anything. INCR is atomic, so they get eight distinct
+    numbers instead and only two of them are under the limit.
+    """
+    monkeypatch.setattr(auth.settings, "login_limit_per_window", 2)
+    await client.post(
+        "/auth/register", json={"email": "burst@example.com", "password": "supersecret123"}
+    )
+
+    attempt = {"username": "burst@example.com", "password": "wrongpassword"}
+    responses = await asyncio.gather(*(client.post("/auth/token", data=attempt) for _ in range(8)))
+
+    codes = [response.status_code for response in responses]
+    assert codes.count(401) == 2
+    assert codes.count(429) == 6
+
+
+async def test_a_refund_does_not_resurrect_an_expired_window():
+    """A bare DECR would recreate the key at -1 with no TTL, and it would then sit there
+    absorbing the next window's failures until something noticed."""
+    bucket = "login:ip:nobody-was-here"
+    await ratelimit.refund([bucket], 900)
+
+    assert await redis.exists(ratelimit._key(bucket, 900)) == 0

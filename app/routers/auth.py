@@ -7,7 +7,7 @@ from app.config import get_settings
 from app.db import get_session
 from app.deps import client_ip, get_current_user
 from app.models import User
-from app.ratelimit import check_limit, enforce_limit, identity_bucket, record_failure
+from app.ratelimit import consume, enforce_limit, identity_bucket, refund
 from app.schemas import Token, UserCreate, UserOut
 from app.security import create_access_token, hash_password, verify_password
 
@@ -51,21 +51,25 @@ async def login(
     Throttled on two keys at once. Per-IP alone lets one attacker spread guesses for a
     single account across a botnet; per-email alone lets one host walk a password through
     a list of accounts. Neither is much use without the other.
-    """
-    ip_bucket = f"login:ip:{client_ip(request)}"
-    email_bucket = f"login:email:{identity_bucket(form.username)}"
-    window = settings.login_window_seconds
 
-    await check_limit(ip_bucket, settings.login_limit_per_window, window)
-    await check_limit(email_bucket, settings.login_limit_per_window, window)
+    Both are spent before the password is checked and handed back if it was right, so a
+    burst of parallel attempts cannot all slip through on the same stale count.
+    """
+    buckets = [
+        f"login:ip:{client_ip(request)}",
+        f"login:email:{identity_bucket(form.username)}",
+    ]
+    window = settings.login_window_seconds
+    await consume(buckets, settings.login_limit_per_window, window)
 
     user = await session.scalar(select(User).where(User.email == form.username))
     # Same error for "no such user" and "wrong password" -- do not leak which emails exist.
     if user is None or not verify_password(form.password, user.password_hash):
-        await record_failure(ip_bucket, window)
-        await record_failure(email_bucket, window)
         raise INVALID_CREDENTIALS
 
+    # The attempt was the account's owner, so give the budget back. Ordinary use has to
+    # cost nothing, or anyone could lock an account out by failing at it often enough.
+    await refund(buckets, window)
     return Token(access_token=create_access_token(str(user.id)))
 
 
