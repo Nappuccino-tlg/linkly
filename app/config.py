@@ -25,6 +25,12 @@ class Settings(BaseSettings):
     create_limit_per_hour: int = 30
     redirect_cache_ttl_seconds: int = 3600
 
+    # Failed sign-ins per window, per IP and per email. Successes cost nothing, so a
+    # legitimate user cannot lock themselves out by signing in often.
+    login_limit_per_window: int = 10
+    login_window_seconds: int = 900
+    register_limit_per_hour: int = 10
+
     # Salt for hashing visitor IPs. Raw IPs are never stored.
     ip_hash_salt: str = "linkly-default-salt"
 

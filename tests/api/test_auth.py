@@ -1,3 +1,6 @@
+from app.routers import auth
+
+
 async def test_register_returns_user_without_password(client):
     response = await client.post(
         "/auth/register", json={"email": "a@example.com", "password": "supersecret123"}
@@ -64,3 +67,113 @@ async def test_me_returns_the_current_user(auth_client):
     response = await auth_client.get("/auth/me")
     assert response.status_code == 200
     assert response.json()["email"] == "owner@example.com"
+
+
+async def test_repeated_bad_passwords_are_throttled(client, monkeypatch):
+    """Without this, a password is only as strong as bcrypt is slow."""
+    monkeypatch.setattr(auth.settings, "login_limit_per_window", 3)
+    await client.post(
+        "/auth/register", json={"email": "target@example.com", "password": "supersecret123"}
+    )
+
+    attempt = {"username": "target@example.com", "password": "wrongpassword"}
+    for _ in range(3):
+        assert (await client.post("/auth/token", data=attempt)).status_code == 401
+
+    blocked = await client.post("/auth/token", data=attempt)
+    assert blocked.status_code == 429
+    assert blocked.headers["Retry-After"]
+
+
+async def test_a_correct_password_is_refused_once_the_budget_is_spent(client, monkeypatch):
+    """The lockout is on the account, not on the guess -- knowing the password comes too late."""
+    monkeypatch.setattr(auth.settings, "login_limit_per_window", 2)
+    await client.post(
+        "/auth/register", json={"email": "locked@example.com", "password": "supersecret123"}
+    )
+
+    for _ in range(2):
+        await client.post(
+            "/auth/token", data={"username": "locked@example.com", "password": "nope"}
+        )
+
+    response = await client.post(
+        "/auth/token", data={"username": "locked@example.com", "password": "supersecret123"}
+    )
+    assert response.status_code == 429
+
+
+async def test_signing_in_correctly_costs_nothing(client, monkeypatch):
+    """Only failures are counted, so no amount of ordinary use locks a user out."""
+    monkeypatch.setattr(auth.settings, "login_limit_per_window", 3)
+    await client.post(
+        "/auth/register", json={"email": "busy@example.com", "password": "supersecret123"}
+    )
+
+    good = {"username": "busy@example.com", "password": "supersecret123"}
+    for _ in range(6):
+        assert (await client.post("/auth/token", data=good)).status_code == 200
+
+
+async def test_guessing_one_account_does_not_lock_out_another(client, monkeypatch):
+    """The per-email bucket has to be per email, or one victim takes everyone down with them.
+
+    The attempts come from different addresses, so the per-IP bucket cannot be what
+    answers here -- otherwise the test would pass without the per-email key existing.
+    """
+    monkeypatch.setattr(auth.settings, "login_limit_per_window", 2)
+    for email in ("victim@example.com", "bystander@example.com"):
+        await client.post("/auth/register", json={"email": email, "password": "supersecret123"})
+
+    for _ in range(3):
+        await client.post(
+            "/auth/token",
+            data={"username": "victim@example.com", "password": "nope"},
+            headers={"x-forwarded-for": "203.0.113.10"},
+        )
+
+    response = await client.post(
+        "/auth/token",
+        data={"username": "bystander@example.com", "password": "supersecret123"},
+        headers={"x-forwarded-for": "203.0.113.11"},
+    )
+    assert response.status_code == 200
+
+
+async def test_registration_is_capped_per_address(client, monkeypatch):
+    monkeypatch.setattr(auth.settings, "register_limit_per_hour", 2)
+
+    for index in range(2):
+        response = await client.post(
+            "/auth/register",
+            json={"email": f"bulk{index}@example.com", "password": "supersecret123"},
+        )
+        assert response.status_code == 201
+
+    blocked = await client.post(
+        "/auth/register", json={"email": "bulk2@example.com", "password": "supersecret123"}
+    )
+    assert blocked.status_code == 429
+
+
+async def test_the_sign_in_bucket_ignores_case_and_padding_in_the_email(client, monkeypatch):
+    """Otherwise ' Victim@Example.com ' is a fresh budget for the same account."""
+    monkeypatch.setattr(auth.settings, "login_limit_per_window", 2)
+    await client.post(
+        "/auth/register", json={"email": "case@example.com", "password": "supersecret123"}
+    )
+
+    for _ in range(2):
+        await client.post(
+            "/auth/token",
+            data={"username": "case@example.com", "password": "no"},
+            headers={"x-forwarded-for": "203.0.113.20"},
+        )
+
+    # From a different address, so only the email bucket can be what refuses this.
+    response = await client.post(
+        "/auth/token",
+        data={"username": "  CASE@Example.com  ", "password": "no"},
+        headers={"x-forwarded-for": "203.0.113.21"},
+    )
+    assert response.status_code == 429

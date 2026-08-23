@@ -17,3 +17,6 @@ os.environ.setdefault(
 os.environ.setdefault("REDIS_URL", "redis://localhost:6379/15")
 os.environ.setdefault("JWT_SECRET", "test-secret-" + "x" * 32)
 os.environ.setdefault("BASE_URL", "http://testserver")
+# Sign-in throttling would otherwise trip partway through a suite that logs in constantly.
+os.environ.setdefault("LOGIN_LIMIT_PER_WINDOW", "500")
+os.environ.setdefault("REGISTER_LIMIT_PER_HOUR", "500")
