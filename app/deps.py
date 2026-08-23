@@ -58,7 +58,11 @@ def client_ip(request: Request) -> str | None:
     if hops < 1:
         return peer
 
-    forwarded = request.headers.get("x-forwarded-for")
+    # getlist, not get: a duplicated header is legal, and Starlette's get() returns the
+    # first one and drops the rest. A proxy that adds its own X-Forwarded-For line rather
+    # than appending to the caller's would then be the one getting ignored -- which is
+    # exactly backwards. Joining them reproduces the single-header form either way.
+    forwarded = ", ".join(request.headers.getlist("x-forwarded-for"))
     if not forwarded:
         return peer
 

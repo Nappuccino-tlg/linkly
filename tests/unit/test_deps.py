@@ -13,8 +13,9 @@ from app.deps import client_ip
 PEER = "203.0.113.7"
 
 
-def make_request(forwarded: str | None = None, peer: str | None = PEER) -> Request:
-    headers = [(b"x-forwarded-for", forwarded.encode())] if forwarded is not None else []
+def make_request(forwarded: str | list[str] | None = None, peer: str | None = PEER) -> Request:
+    values = [] if forwarded is None else [forwarded] if isinstance(forwarded, str) else forwarded
+    headers = [(b"x-forwarded-for", value.encode()) for value in values]
     scope = {
         "type": "http",
         "method": "GET",
@@ -73,6 +74,22 @@ def test_a_missing_header_falls_back_to_the_peer(hops):
 def test_an_empty_header_falls_back_to_the_peer(hops):
     hops(1)
     assert client_ip(make_request("   ,  ")) == PEER
+
+
+def test_a_second_forwarded_header_does_not_let_the_caller_win(hops):
+    """A duplicated header is legal, and only reading the first one inverts the trust.
+
+    If the proxy in front adds its own X-Forwarded-For line instead of appending to the
+    caller's, the caller's line comes first -- and believing that one hands the address
+    straight back to whoever we were trying not to believe.
+    """
+    hops(1)
+    assert client_ip(make_request(["9.9.9.9", "1.2.3.4"])) == "1.2.3.4"
+
+
+def test_headers_are_joined_before_the_hops_are_counted(hops):
+    hops(2)
+    assert client_ip(make_request(["9.9.9.9", "1.2.3.4, 10.0.0.1"])) == "1.2.3.4"
 
 
 def test_ipv6_is_accepted(hops):
