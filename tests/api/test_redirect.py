@@ -22,11 +22,23 @@ async def test_unknown_code_is_a_404(client):
 
 
 async def test_expired_link_is_gone(auth_client, client):
+    """Retired through PATCH, because creation refuses an expiry that has already passed."""
+    soon = (datetime.now(UTC) + timedelta(hours=1)).isoformat()
+    await _make_link(auth_client, code="stale", expires_at=soon)
+
     past = (datetime.now(UTC) - timedelta(hours=1)).isoformat()
-    await _make_link(auth_client, code="stale", expires_at=past)
+    await auth_client.patch("/api/links/stale", json={"expires_at": past})
 
     response = await client.get("/stale", follow_redirects=False)
     assert response.status_code == 410
+
+
+async def test_a_link_cannot_be_created_already_expired(auth_client):
+    past = (datetime.now(UTC) - timedelta(hours=1)).isoformat()
+    response = await auth_client.post(
+        "/api/links", json={"target_url": "https://example.com", "expires_at": past}
+    )
+    assert response.status_code == 422
 
 
 async def test_deleted_link_stops_redirecting_even_though_it_was_cached(auth_client, client):

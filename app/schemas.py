@@ -1,5 +1,5 @@
 import uuid
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
@@ -35,6 +35,18 @@ def _validate_target(value: str) -> str:
     return value
 
 
+def _as_utc(value: datetime | None) -> datetime | None:
+    """Read a naive timestamp as UTC rather than rejecting it.
+
+    Every timestamp this API hands out is UTC, so that is the only reading of a naive one
+    that will not surprise the sender. Leaving it naive is the option with a real cost:
+    it reaches a timestamptz column and a comparison against an aware `now()`.
+    """
+    if value is None:
+        return None
+    return value.replace(tzinfo=UTC) if value.tzinfo is None else value
+
+
 def _validate_code(value: str | None) -> str | None:
     if value is not None and not all(c.isalnum() or c in "-_" for c in value):
         raise ValueError("custom_code may only contain letters, digits, '-' and '_'")
@@ -53,6 +65,20 @@ class LinkCreate(BaseModel):
     _check_target = field_validator("target_url")(_validate_target)
     _check_code = field_validator("custom_code")(_validate_code)
 
+    @field_validator("expires_at")
+    @classmethod
+    def expiry_must_be_ahead(cls, value: datetime | None) -> datetime | None:
+        """A link that is born expired is a typo, never an intention.
+
+        PATCH deliberately does allow a past timestamp -- there it means "retire this
+        now" -- but at creation the only thing it can produce is a code that answers 410
+        to its very first visitor.
+        """
+        moment = _as_utc(value)
+        if moment is not None and moment <= datetime.now(UTC):
+            raise ValueError("expires_at must be in the future")
+        return moment
+
 
 class LinkUpdate(BaseModel):
     """Every field optional. Only the ones actually sent are applied."""
@@ -65,6 +91,10 @@ class LinkUpdate(BaseModel):
     @classmethod
     def target_must_be_safe(cls, value: str | None) -> str | None:
         return None if value is None else _validate_target(value)
+
+    # A timestamp in the past is allowed here: it is how a link is retired on the spot
+    # while keeping the code reserved.
+    _normalise_expiry = field_validator("expires_at")(_as_utc)
 
 
 class LinkOut(BaseModel):
