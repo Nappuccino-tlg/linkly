@@ -93,16 +93,21 @@ async def main() -> None:
     parser.add_argument("--keep", action="store_true", help="leave the seeded data behind")
     args = parser.parse_args()
 
-    email = f"benchmark-{uuid.uuid4().hex[:8]}@example.invalid"
+    # example.com, not example.invalid: EmailStr refuses special-use TLDs, and a
+    # benchmark that cannot create its own account is not much of a benchmark.
+    email = f"benchmark-{uuid.uuid4().hex[:8]}@example.com"
     password = "benchmark-password"
     code = f"bench{uuid.uuid4().hex[:6]}"
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://benchmark") as anon:
-        await anon.post("/auth/register", json={"email": email, "password": password})
-        token = (
-            await anon.post("/auth/token", data={"username": email, "password": password})
-        ).json()["access_token"]
+        # Checked rather than assumed: without this, a refused registration surfaces four
+        # lines later as a KeyError on "access_token", which says nothing about the cause.
+        registered = await anon.post("/auth/register", json={"email": email, "password": password})
+        registered.raise_for_status()
+        issued = await anon.post("/auth/token", data={"username": email, "password": password})
+        issued.raise_for_status()
+        token = issued.json()["access_token"]
 
     async with AsyncClient(
         transport=transport,
