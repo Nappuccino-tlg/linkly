@@ -3,8 +3,10 @@
 # development container needs to be holding itself.
 services:
   app:
-    # Same base as the Dockerfile, so the Python a Codespace runs is the Python that ships.
-    image: python:3.12-slim
+    # The devcontainer base rather than python:3.12-slim. Matching the Dockerfile is the
+    # right instinct for the image that ships and the wrong one here: slim carries no git,
+    # no curl and no gh, so a Codespace built on it cannot even commit.
+    image: mcr.microsoft.com/devcontainers/python:3.12
     volumes:
       - ..:/workspaces/linkly:cached
     working_dir: /workspaces/linkly

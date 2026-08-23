@@ -4,6 +4,12 @@
   "service": "app",
   "workspaceFolder": "/workspaces/linkly",
 
+  // Applied by Codespaces, not by a plain `docker compose up` -- so gh is present in a
+  // Codespace and absent when the same compose file is run by hand.
+  "features": {
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+
   "onCreateCommand": "bash .devcontainer/setup.sh",
   "postAttachCommand": "bash .devcontainer/serve.sh",
 
@@ -11,7 +17,12 @@
   "portsAttributes": {
     "8000": {
       "label": "Linkly",
-      "onAutoForward": "openPreview"
+      "onAutoForward": "openPreview",
+      // Public, because the point of the button on the README is that a stranger can try
+      // it. A private forwarded port sends the browser through a sign-in postback first,
+      // and when that does not complete the page simply fails. The Codespace is the
+      // visitor's own throwaway instance, so there is nothing here to protect.
+      "visibility": "public"
     }
   },
 
