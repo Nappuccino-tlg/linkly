@@ -156,6 +156,14 @@ sign-in postback did not go through: in the **PORTS** tab, right-click port 8000
 Visibility** → **Public**. There is no way to preset that — `devcontainer.json` has no key
 for port visibility, and Codespaces takes the change only from the UI or the CLI.
 
+One thing a Codespace cannot show you is a short link. Short links are built from
+`BASE_URL`, and a Codespace answers on a hostname like
+`solid-fiesta-5v46w7g5r466cp474-8000.app.github.dev` — so `/salam` comes back longer than
+most of what you would want to shorten. On a real domain the same link is
+`https://lnk.ly/salam`. What the Codespace demonstrates is the part that has any
+engineering in it: the redirect, the click that gets counted without slowing it down, and
+the stats behind it. Generating the code itself is [nineteen lines](app/shortcode.py).
+
 Locally, with Docker:
 
 ```bash
