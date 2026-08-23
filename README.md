@@ -183,12 +183,13 @@ current command names:
 fly launch --no-deploy
 fly postgres create --name linkly-db && fly postgres attach linkly-db
 fly redis create
-fly secrets set JWT_SECRET="$(python -c 'import secrets; print(secrets.token_urlsafe(48))')" REDIS_URL="<from fly redis create>"
+fly secrets set   JWT_SECRET="$(python -c 'import secrets; print(secrets.token_urlsafe(48))')"   IP_HASH_SALT="$(python -c 'import secrets; print(secrets.token_urlsafe(32))')"   REDIS_URL="<from fly redis create>"
 fly deploy
 ```
 
-`ENVIRONMENT=production` makes the app refuse to start on a default or short `JWT_SECRET`,
-so a forgotten secret fails the deploy instead of shipping forgeable tokens. Set
+`ENVIRONMENT=production` makes the app refuse to start on a default or short `JWT_SECRET`
+or `IP_HASH_SALT`, so a forgotten secret fails the deploy instead of shipping forgeable
+tokens or reversible visitor hashes. Set
 `TRUSTED_PROXY_HOPS=1` behind Fly, or behind any single reverse proxy — see the design
 note below for what goes wrong if you do not.
 
@@ -235,7 +236,12 @@ nothing else about what went wrong.
 falls through to `/{code}` and costs a database lookup on every page view.
 
 **Raw IP addresses are never stored.** Unique-visitor counts come from a salted SHA-256 of
-the address, which is enough to count distinct people and not enough to identify them.
+the address, which is enough to count distinct people and not enough to identify them —
+but only because of the salt, and only if the salt is real. IPv4 is 2^32 addresses, so a
+hash with a salt that ships in the source is a lookup table someone can build in an
+afternoon, and the sentence before this one would be false. `ENVIRONMENT=production`
+refuses to start on the default `IP_HASH_SALT` for the same reason it refuses to start on
+the default `JWT_SECRET`.
 
 **Only failed sign-ins cost anything, and the budget is spent before the password is
 checked.** Those two have to go together. Reading the counter, checking a password, and

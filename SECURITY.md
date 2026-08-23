@@ -21,8 +21,8 @@ load-bearing rather than decorative.
 | Vanity codes shadowing real routes such as `/docs` | [`app/shortcode.py`](app/shortcode.py) |
 | Password guessing | Per-IP and per-email throttling in [`app/routers/auth.py`](app/routers/auth.py) |
 | A forged `X-Forwarded-For` buying unlimited quota | [`app/deps.py`](app/deps.py), off unless `TRUSTED_PROXY_HOPS` says otherwise |
-| Forgeable tokens from a default secret | Startup check in [`app/config.py`](app/config.py) when `ENVIRONMENT=production` |
-| Storing visitor IP addresses | Never stored; a salted SHA-256 is, and only to count |
+| Forgeable tokens, or reversible visitor hashes, from a shipped default | Startup check in [`app/config.py`](app/config.py) when `ENVIRONMENT=production` |
+| Storing visitor IP addresses | Never stored; a salted SHA-256 is, and only to count. IPv4 is small, so the salt is treated as a secret |
 | A stored `target_url` being sniffed as HTML | `X-Content-Type-Options: nosniff` on every response |
 
 ## What it deliberately does not defend against
