@@ -9,6 +9,9 @@ primary_region = "fra"
 [env]
   ENVIRONMENT = "production"
   BASE_URL = "https://linkly.fly.dev"
+  # fly-proxy appends the address it saw to X-Forwarded-For, so the last entry is the
+  # client and everything before it is whatever the client typed. One hop.
+  TRUSTED_PROXY_HOPS = "1"
 
 [deploy]
   # Runs once per release, before the new machines take traffic.
@@ -31,3 +34,9 @@ primary_region = "fra"
 [[vm]]
   size = "shared-cpu-1x"
   memory = "512mb"
+
+# Rollups are not deployed with the app: they are two commands run on a schedule. Neither
+# has to run for /stats to be correct, so nothing here is on the critical path.
+#
+#   fly machine run . --schedule hourly --command "python -m app.rollup fold"
+#   fly machine run . --schedule daily  --command "python -m app.rollup prune"

@@ -1,0 +1,42 @@
+name: Bug report
+description: Something behaves differently from how it is documented
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: >-
+        A request that reproduces it is worth more than a description of it. If you have a
+        request id from an `X-Request-ID` header or an error body, include it.
+      placeholder: |
+        curl -i -X POST localhost:8000/api/links \
+          -H "Authorization: Bearer ..." \
+          -d '{"target_url": "https://example.com"}'
+
+        HTTP/1.1 500 Internal Server Error
+        x-request-id: 9f2c...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected instead
+    validations:
+      required: true
+
+  - type: input
+    id: how-running
+    attributes:
+      label: How you are running it
+      placeholder: docker compose / uvicorn locally / deployed on Fly
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant log lines
+      description: Logs are JSON, one object per line. The line carrying the same request_id is the one.
+      render: json

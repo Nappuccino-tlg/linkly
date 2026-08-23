@@ -1,0 +1,27 @@
+name: Feature request
+description: Suggest something the project should do
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What are you trying to do that the API does not let you do today?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you have in mind
+      description: >-
+        Rough is fine. If it touches the public API, showing the request and response you
+        would want is the fastest way to have the conversation.
+
+  - type: textarea
+    id: cost
+    attributes:
+      label: What it would cost
+      description: >-
+        Optional, and genuinely useful. A new dependency, a build step, a slower redirect
+        path -- knowing the price up front is most of the decision.
