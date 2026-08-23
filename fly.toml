@@ -9,6 +9,9 @@ primary_region = "fra"
 [env]
   ENVIRONMENT = "production"
   BASE_URL = "https://linkly.fly.dev"
+  # fly-proxy appends the address it saw to X-Forwarded-For, so the last entry is the
+  # client and everything before it is whatever the client typed. One hop.
+  TRUSTED_PROXY_HOPS = "1"
 
 [deploy]
   # Runs once per release, before the new machines take traffic.

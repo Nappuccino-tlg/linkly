@@ -31,6 +31,10 @@ class Settings(BaseSettings):
     login_window_seconds: int = 900
     register_limit_per_hour: int = 10
 
+    # How many proxies sit in front of this app. 0 means "exposed directly", and
+    # X-Forwarded-For is then ignored entirely -- see app/deps.py for why that matters.
+    trusted_proxy_hops: int = 0
+
     # Salt for hashing visitor IPs. Raw IPs are never stored.
     ip_hash_salt: str = "linkly-default-salt"
 

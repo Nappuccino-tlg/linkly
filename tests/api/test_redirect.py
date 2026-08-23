@@ -75,6 +75,25 @@ async def test_stats_count_unique_visitors_separately_from_clicks(auth_client, c
     assert stats["unique_visitors"] == 2
 
 
+async def test_a_spoofed_forwarded_header_cannot_invent_visitors(auth_client, client):
+    """One proxy hop is trusted, so only the entry it appended counts.
+
+    Anything to the left of that is whatever the caller typed. If it were believed, a
+    fresh value per request would be an unlimited visitor count and an unlimited per-IP
+    rate-limit quota.
+    """
+    await _make_link(auth_client, code="spoof")
+
+    for forged in ("9.9.9.1", "9.9.9.2", "9.9.9.3"):
+        await client.get(
+            "/spoof", follow_redirects=False, headers={"x-forwarded-for": f"{forged}, 5.5.5.5"}
+        )
+
+    stats = (await auth_client.get("/api/links/spoof/stats")).json()
+    assert stats["total_clicks"] == 3
+    assert stats["unique_visitors"] == 1
+
+
 async def test_stats_are_owner_only(auth_client, client):
     await _make_link(auth_client, code="secret")
     assert (await client.get("/api/links/secret/stats")).status_code == 401
