@@ -10,6 +10,10 @@ Built with FastAPI, PostgreSQL and Redis, with a dashboard on top of the public 
 ![Python](https://img.shields.io/badge/python-3.12-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
+![The Linkly dashboard: a link list, click totals, a daily bar chart and top referrers](docs/dashboard.png)
+
+<sub>The dashboard at `/app/`, running against sample data.</sub>
+
 ---
 
 ## How it works
@@ -272,6 +276,12 @@ otherwise someone could claim `/docs` and take out the API documentation.
 - [x] Dashboard at `/app/`, no build step
 - [x] Aggregate click rollups so stats stay fast past a few million rows
 - [ ] Resolve-then-pin at redirect time, so a hostname cannot resolve somewhere private
+
+## Contributing
+
+Issues and pull requests are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) for what CI
+expects and what the code is trying to be. Security issues go through
+[private reporting](SECURITY.md) rather than the issue tracker.
 
 ## License
 
