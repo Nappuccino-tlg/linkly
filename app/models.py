@@ -1,9 +1,23 @@
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 
-from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Index, String, Text, func
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    Date,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    func,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+
+# Referrers are keys in the rollup table, so they are cut to a length a btree can hold.
+REFERRER_KEY_MAX = 512
 
 
 class Base(DeclarativeBase):
@@ -56,4 +70,42 @@ class Click(Base):
     link: Mapped[Link] = relationship(back_populates="clicks")
 
 
+class ClickDaily(Base):
+    """One row per link per UTC day, folded from raw clicks by app/rollup.py.
+
+    This is what keeps /stats a constant-size read. A link with four years of traffic has
+    ~1460 rows here no matter how many millions of clicks produced them, and the raw rows
+    behind the closed days can be deleted once they are folded.
+    """
+
+    __tablename__ = "click_daily"
+
+    link_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("links.id", ondelete="CASCADE"), primary_key=True
+    )
+    day: Mapped[date] = mapped_column(Date, primary_key=True)
+    clicks: Mapped[int] = mapped_column(BigInteger)
+    # Distinct ip_hash values within this one day. Summing the column across days counts a
+    # returning visitor once per day -- see LinkStats for why that is the definition.
+    unique_visitors: Mapped[int] = mapped_column(Integer)
+
+
+class ReferrerDaily(Base):
+    """Per-link, per-day, per-referrer counts. Empty string means no referrer."""
+
+    __tablename__ = "referrer_daily"
+
+    link_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("links.id", ondelete="CASCADE"), primary_key=True
+    )
+    day: Mapped[date] = mapped_column(Date, primary_key=True)
+    # Part of the primary key, so it is bounded: a btree entry has a hard size limit and a
+    # 2048-character referrer would breach it. Truncation merges two referrers that agree
+    # for 512 characters, which is not a distinction any report needs.
+    referrer: Mapped[str] = mapped_column(String(REFERRER_KEY_MAX), primary_key=True)
+    clicks: Mapped[int] = mapped_column(BigInteger)
+
+
 Index("ix_clicks_link_id_clicked_at", Click.link_id, Click.clicked_at)
+# Prune walks the whole table by age, across every link -- a link-first index cannot serve it.
+Index("ix_clicks_clicked_at", Click.clicked_at)

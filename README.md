@@ -49,7 +49,7 @@ The redirect path is the hot path, so it is the one that got the attention:
 | `GET` | `/api/links/{code}` | Link detail |
 | `PATCH` | `/api/links/{code}` | Repoint, expire or disable a link |
 | `DELETE` | `/api/links/{code}` | Delete a link and invalidate its cache entry |
-| `GET` | `/api/links/{code}/stats` | Clicks, unique visitors, daily buckets, top referrers |
+| `GET` | `/api/links/{code}/stats` | Clicks, visitors, daily buckets, top referrers |
 | `GET` | `/api/links/{code}/qr` | QR code for the short link, as PNG or SVG |
 | `GET` | `/{code}` | The redirect itself |
 | `GET` | `/healthz` · `/readyz` | Liveness, and readiness that checks Postgres and Redis |
@@ -68,6 +68,61 @@ same public endpoints anyone else would. Nothing is exposed to it that is not al
 documented at `/docs`. The one place that shape shows through is the QR code — the
 endpoint is owner-only, so an `<img src>` cannot fetch it (there is no way to attach a
 bearer token to an image request) and the page fetches it as a blob instead.
+
+## Keeping stats fast
+
+`/stats` used to aggregate the `clicks` table on every call. That is exact, and it is fine
+right up until it is not: the work grows with the traffic being reported on, so a link
+with three million clicks pays for three million rows to answer "how did last week go".
+
+Closed days are folded into one row per link per day, and `/stats` reads those. What is
+left to scan live is whatever has arrived since the newest folded day — usually a few
+hours of one link's traffic. The cost of a stats call stops tracking the link's success.
+
+```mermaid
+flowchart LR
+    RAW[(clicks)] -->|fold: closed days| CD[(click_daily)]
+    RAW -->|fold: closed days| RD[(referrer_daily)]
+    RAW -->|prune: past retention| GONE((deleted))
+
+    CD --> S{{"GET /stats"}}
+    RD --> S
+    RAW -.->|only what landed since the newest folded day| S
+```
+
+Two commands, and neither has to run for `/stats` to be correct:
+
+```bash
+python -m app.rollup fold             # recompute recent closed days
+python -m app.rollup prune            # delete raw rows past CLICK_RETENTION_DAYS
+```
+
+`fold` hourly and `prune` daily is plenty. The details worth knowing:
+
+**The boundary comes from the data, not the clock.** `/stats` asks which day this link was
+last folded up to and reads live rows from there on. A fold that has not run yet costs
+accuracy nothing — the day is simply still counted from the raw table. That is what makes
+the schedule an optimisation rather than a dependency.
+
+**`fold` replaces a day rather than adding to it,** which is what makes running it twice a
+no-op instead of a doubling. It also means a click that lands after its own day was folded
+— a background task crossing midnight — is picked up by the next run instead of being lost.
+
+**`prune` folds the rows it is about to delete, in the same transaction.** There is no
+window in which a day has been deleted but not summarised, so the two commands cannot be
+scheduled into a state that loses data.
+
+**Nothing in it changes an answer.** [`tests/api/test_rollup.py`](tests/api/test_rollup.py)
+mostly runs the same query twice — once against raw clicks, once after those rows have
+been folded and in some cases deleted — and asserts the two agree. To measure the payoff
+on your own hardware:
+
+```bash
+python scripts/benchmark_stats.py --clicks 2000000 --days 365
+```
+
+That seeds a link, times `/stats`, folds, times it again, and checks the two responses are
+identical — because a speedup that changed the numbers would not be a speedup.
 
 ## Running it
 
@@ -89,10 +144,13 @@ alembic upgrade head
 uvicorn app.main:app --reload
 ```
 
+Nothing schedules the rollups locally; run them by hand when you want to see them work.
+
 ## Tests
 
-`tests/unit` is pure logic — hashing, tokens, code generation, config guards — and runs
-anywhere with nothing but Python:
+`tests/unit` is pure logic — hashing, tokens, code generation, config guards, which
+client address to believe, what an expiry may say — and runs anywhere with nothing but
+Python:
 
 ```bash
 pytest tests/unit
@@ -126,7 +184,19 @@ fly deploy
 ```
 
 `ENVIRONMENT=production` makes the app refuse to start on a default or short `JWT_SECRET`,
-so a forgotten secret fails the deploy instead of shipping forgeable tokens.
+so a forgotten secret fails the deploy instead of shipping forgeable tokens. Set
+`TRUSTED_PROXY_HOPS=1` behind Fly, or behind any single reverse proxy — see the design
+note below for what goes wrong if you do not.
+
+The rollups are not part of the app process. They are two scheduled commands:
+
+```bash
+fly machine run . --schedule hourly --command "python -m app.rollup fold"
+fly machine run . --schedule daily  --command "python -m app.rollup prune"
+```
+
+Neither is on the critical path, so a machine that fails to start costs latency on
+`/stats` and nothing else.
 
 ## Design notes
 
@@ -163,6 +233,26 @@ falls through to `/{code}` and costs a database lookup on every page view.
 **Raw IP addresses are never stored.** Unique-visitor counts come from a salted SHA-256 of
 the address, which is enough to count distinct people and not enough to identify them.
 
+**Only failed sign-ins cost anything.** The limiter checks the budget before an attempt
+and spends from it only when the password was wrong, so someone signing in correctly forty
+times is never locked out while someone guessing gets ten tries. It is keyed on the IP and
+on the email at once: per-IP alone lets one attacker spread guesses for a single account
+across a botnet, and per-email alone lets one host walk a password list through a set of
+accounts. Neither is much use without the other.
+
+**`X-Forwarded-For` is a request header like any other.** Anyone talking to the app
+directly can put whatever they like in it, and this value keys the per-IP rate limit and
+seeds the unique-visitor hash — so trusting it unconditionally hands both away, since a
+fresh value per request is an unlimited quota and an unlimited visitor count. It is read
+only when `TRUSTED_PROXY_HOPS` says a proxy is really in front, and then only the entry
+that proxy appended. The default is 0: believe the socket.
+
+**A unique visitor is counted per day.** Someone who comes back tomorrow counts twice, and
+that is a choice rather than a rounding error. An exact all-time distinct would mean either
+keeping every raw click row forever or carrying a sketch per link, and the number it
+produces answers a question nobody asks of a short link. The per-day figure is the one that
+makes a chart, and it is exact.
+
 **Rate limiting is a fixed window,** keyed per user and per IP. A burst straddling a window
 boundary can pass up to twice the limit; a sliding window would fix that at the cost of a
 sorted set per client, which is not worth it at this size. The tradeoff is deliberate,
@@ -180,7 +270,8 @@ otherwise someone could claim `/docs` and take out the API documentation.
 - [x] QR code generation per link (PNG and SVG)
 - [x] Repoint or disable a link without changing its code
 - [x] Dashboard at `/app/`, no build step
-- [ ] Aggregate click rollups so stats stay fast past a few million rows
+- [x] Aggregate click rollups so stats stay fast past a few million rows
+- [ ] Resolve-then-pin at redirect time, so a hostname cannot resolve somewhere private
 
 ## License
 

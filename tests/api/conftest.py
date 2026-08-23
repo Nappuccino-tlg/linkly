@@ -28,7 +28,12 @@ async def _clean_state():
     """Each test starts with empty tables, an empty cache and reset rate-limit counters."""
     yield
     async with engine.begin() as conn:
-        await conn.execute(text("TRUNCATE users, links, clicks RESTART IDENTITY CASCADE"))
+        await conn.execute(
+            text(
+                "TRUNCATE users, links, clicks, click_daily, referrer_daily "
+                "RESTART IDENTITY CASCADE"
+            )
+        )
     await redis.flushdb()
 
 

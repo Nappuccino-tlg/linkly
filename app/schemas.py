@@ -120,6 +120,7 @@ class LinkPage(BaseModel):
 class DailyClicks(BaseModel):
     day: date
     count: int
+    unique_visitors: int
 
 
 class ReferrerCount(BaseModel):
@@ -128,6 +129,16 @@ class ReferrerCount(BaseModel):
 
 
 class LinkStats(BaseModel):
+    """Traffic for one link. Days are UTC.
+
+    `unique_visitors` counts distinct visitors *per day* and adds those up, so someone who
+    comes back tomorrow is counted twice. That is a real choice, not a rounding error: an
+    exact all-time distinct would mean either keeping every raw click row forever or
+    carrying a sketch per link, and the number it produces answers a question ("how many
+    different people have ever clicked this") that nobody asks of a short link. The
+    per-day figure is the one that makes a chart, and it is exact.
+    """
+
     code: str
     total_clicks: int
     unique_visitors: int

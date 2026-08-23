@@ -85,6 +85,7 @@ async def test_stats_count_unique_visitors_separately_from_clicks(auth_client, c
     stats = (await auth_client.get("/api/links/uniq/stats")).json()
     assert stats["total_clicks"] == 3
     assert stats["unique_visitors"] == 2
+    assert stats["daily"][0]["unique_visitors"] == 2
 
 
 async def test_a_spoofed_forwarded_header_cannot_invent_visitors(auth_client, client):

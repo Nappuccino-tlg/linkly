@@ -34,3 +34,9 @@ primary_region = "fra"
 [[vm]]
   size = "shared-cpu-1x"
   memory = "512mb"
+
+# Rollups are not deployed with the app: they are two commands run on a schedule. Neither
+# has to run for /stats to be correct, so nothing here is on the critical path.
+#
+#   fly machine run . --schedule hourly --command "python -m app.rollup fold"
+#   fly machine run . --schedule daily  --command "python -m app.rollup prune"

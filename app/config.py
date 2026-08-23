@@ -35,6 +35,9 @@ class Settings(BaseSettings):
     # X-Forwarded-For is then ignored entirely -- see app/deps.py for why that matters.
     trusted_proxy_hops: int = 0
 
+    # Days of raw click rows to keep. Older days live on as rollups; see app/rollup.py.
+    click_retention_days: int = 90
+
     # Salt for hashing visitor IPs. Raw IPs are never stored.
     ip_hash_salt: str = "linkly-default-salt"
 
