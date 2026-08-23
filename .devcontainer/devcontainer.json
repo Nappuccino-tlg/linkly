@@ -17,12 +17,11 @@
   "portsAttributes": {
     "8000": {
       "label": "Linkly",
-      "onAutoForward": "openPreview",
-      // Public, because the point of the button on the README is that a stranger can try
-      // it. A private forwarded port sends the browser through a sign-in postback first,
-      // and when that does not complete the page simply fails. The Codespace is the
-      // visitor's own throwaway instance, so there is nothing here to protect.
-      "visibility": "public"
+      // Port visibility is deliberately not set here: devcontainer.json has no key for
+      // it, and Codespaces only accepts the change from the UI or the CLI. serve.sh says
+      // so on startup, because a private port that fails its sign-in postback looks
+      // exactly like a broken application.
+      "onAutoForward": "openPreview"
     }
   },
 

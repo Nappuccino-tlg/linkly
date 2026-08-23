@@ -9,7 +9,16 @@ set -euo pipefail
 if [ -n "${CODESPACE_NAME:-}" ]; then
   domain="${GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN:-app.github.dev}"
   export BASE_URL="https://${CODESPACE_NAME}-8000.${domain}"
-  echo "==> short links will be built from ${BASE_URL}"
+  cat <<EOF
+
+==> ${BASE_URL}
+
+    If that address shows "This page isn't working", the forwarded port is private and
+    the sign-in postback did not complete. In the PORTS tab, right-click port 8000 ->
+    Port Visibility -> Public, then reload. Nothing here needs protecting: this Codespace
+    is yours alone and goes away when you delete it.
+
+EOF
 fi
 
 exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload

@@ -147,10 +147,14 @@ traffic, because the left column grows and the right one does not.
 ## Running it
 
 The quickest way to see it work is the Codespaces button above. It brings up Postgres,
-Redis and the app, runs the migrations, and opens the dashboard — nothing to install, and
-the instance is reachable only by you. Create an account, shorten something, open the
-short link, and watch the click counter move. `pytest` works in there too, against the
-real Postgres and Redis rather than a mock.
+Redis and the app, runs the migrations, and opens the dashboard — nothing to install.
+Create an account, shorten something, open the short link, and watch the click counter
+move. `pytest` works in there too, against the real Postgres and Redis rather than a mock.
+
+If the forwarded address answers "This page isn't working", the port is private and the
+sign-in postback did not go through: in the **PORTS** tab, right-click port 8000 → **Port
+Visibility** → **Public**. There is no way to preset that — `devcontainer.json` has no key
+for port visibility, and Codespaces takes the change only from the UI or the CLI.
 
 Locally, with Docker:
 
