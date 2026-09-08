@@ -65,5 +65,13 @@ jobs:
         env:
           DATABASE_URL: postgresql+asyncpg://linkly:linkly@localhost:5432/linkly_test
 
+      - name: Check the migrations lock nothing
+        # 0002 built an index on `clicks` the blocking way for weeks before anything
+        # noticed. Every redirect writes to that table, so the migration would have
+        # stopped the site it was meant to speed up.
+        run: |
+          pip install lockcheck
+          lockcheck
+
       - name: Test
         run: pytest --cov-fail-under=95
