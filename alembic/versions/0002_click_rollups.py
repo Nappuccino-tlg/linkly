@@ -44,10 +44,21 @@ def upgrade() -> None:
 
     # Retention deletes by age across every link; the existing (link_id, clicked_at)
     # index leads with the wrong column to serve that.
-    op.create_index("ix_clicks_clicked_at", "clicks", ["clicked_at"])
+    #
+    # Built concurrently, and outside the migration's transaction because CONCURRENTLY
+    # cannot run inside one. The plain form takes a SHARE lock on `clicks` until the index
+    # finishes, and every redirect writes a row to `clicks` -- so on the size of table this
+    # feature exists for, an ordinary CREATE INDEX stops the redirects it is meant to make
+    # faster. A concurrent build can fail and leave an INVALID index behind, which is a
+    # DROP INDEX and a retry, and a far better failure than a stalled site.
+    with op.get_context().autocommit_block():
+        op.create_index(
+            "ix_clicks_clicked_at", "clicks", ["clicked_at"], postgresql_concurrently=True
+        )
 
 
 def downgrade() -> None:
-    op.drop_index("ix_clicks_clicked_at", table_name="clicks")
+    with op.get_context().autocommit_block():
+        op.drop_index("ix_clicks_clicked_at", table_name="clicks", postgresql_concurrently=True)
     op.drop_table("referrer_daily")
     op.drop_table("click_daily")
