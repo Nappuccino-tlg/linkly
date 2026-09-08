@@ -1,8 +1,6 @@
 import asyncio
 
 from app import ratelimit
-from app.cache import redis
-from app.routers import auth
 
 
 async def test_register_returns_user_without_password(client):
@@ -75,7 +73,7 @@ async def test_me_returns_the_current_user(auth_client):
 
 async def test_repeated_bad_passwords_are_throttled(client, monkeypatch):
     """Without this, a password is only as strong as bcrypt is slow."""
-    monkeypatch.setattr(auth.settings, "login_limit_per_window", 3)
+    monkeypatch.setattr(ratelimit.sign_in, "limit", 3)
     await client.post(
         "/auth/register", json={"email": "target@example.com", "password": "supersecret123"}
     )
@@ -91,7 +89,7 @@ async def test_repeated_bad_passwords_are_throttled(client, monkeypatch):
 
 async def test_a_correct_password_is_refused_once_the_budget_is_spent(client, monkeypatch):
     """The lockout is on the account, not on the guess -- knowing the password comes too late."""
-    monkeypatch.setattr(auth.settings, "login_limit_per_window", 2)
+    monkeypatch.setattr(ratelimit.sign_in, "limit", 2)
     await client.post(
         "/auth/register", json={"email": "locked@example.com", "password": "supersecret123"}
     )
@@ -109,7 +107,7 @@ async def test_a_correct_password_is_refused_once_the_budget_is_spent(client, mo
 
 async def test_signing_in_correctly_costs_nothing(client, monkeypatch):
     """Only failures are counted, so no amount of ordinary use locks a user out."""
-    monkeypatch.setattr(auth.settings, "login_limit_per_window", 3)
+    monkeypatch.setattr(ratelimit.sign_in, "limit", 3)
     await client.post(
         "/auth/register", json={"email": "busy@example.com", "password": "supersecret123"}
     )
@@ -125,7 +123,7 @@ async def test_guessing_one_account_does_not_lock_out_another(client, monkeypatc
     The attempts come from different addresses, so the per-IP bucket cannot be what
     answers here -- otherwise the test would pass without the per-email key existing.
     """
-    monkeypatch.setattr(auth.settings, "login_limit_per_window", 2)
+    monkeypatch.setattr(ratelimit.sign_in, "limit", 2)
     for email in ("victim@example.com", "bystander@example.com"):
         await client.post("/auth/register", json={"email": email, "password": "supersecret123"})
 
@@ -145,7 +143,7 @@ async def test_guessing_one_account_does_not_lock_out_another(client, monkeypatc
 
 
 async def test_registration_is_capped_per_address(client, monkeypatch):
-    monkeypatch.setattr(auth.settings, "register_limit_per_hour", 2)
+    monkeypatch.setattr(ratelimit.registration, "limit", 2)
 
     for index in range(2):
         response = await client.post(
@@ -162,7 +160,7 @@ async def test_registration_is_capped_per_address(client, monkeypatch):
 
 async def test_the_sign_in_bucket_ignores_case_and_padding_in_the_email(client, monkeypatch):
     """Otherwise ' Victim@Example.com ' is a fresh budget for the same account."""
-    monkeypatch.setattr(auth.settings, "login_limit_per_window", 2)
+    monkeypatch.setattr(ratelimit.sign_in, "limit", 2)
     await client.post(
         "/auth/register", json={"email": "case@example.com", "password": "supersecret123"}
     )
@@ -192,7 +190,7 @@ async def test_a_burst_of_parallel_guesses_cannot_outrun_the_limit(client, monke
     in the config stops describing anything. INCR is atomic, so they get eight distinct
     numbers instead and only two of them are under the limit.
     """
-    monkeypatch.setattr(auth.settings, "login_limit_per_window", 2)
+    monkeypatch.setattr(ratelimit.sign_in, "limit", 2)
     await client.post(
         "/auth/register", json={"email": "burst@example.com", "password": "supersecret123"}
     )
@@ -203,12 +201,3 @@ async def test_a_burst_of_parallel_guesses_cannot_outrun_the_limit(client, monke
     codes = [response.status_code for response in responses]
     assert codes.count(401) == 2
     assert codes.count(429) == 6
-
-
-async def test_a_refund_does_not_resurrect_an_expired_window():
-    """A bare DECR would recreate the key at -1 with no TTL, and it would then sit there
-    absorbing the next window's failures until something noticed."""
-    bucket = "login:ip:nobody-was-here"
-    await ratelimit.refund([bucket], 900)
-
-    assert await redis.exists(ratelimit._key(bucket, 900)) == 0

@@ -6,13 +6,12 @@ from sqlalchemy import delete, desc, distinct, func, select, union_all
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app import cache, qrcodes
+from app import cache, qrcodes, ratelimit
 from app.config import get_settings
 from app.db import get_session
 from app.deps import client_ip, get_current_user
 from app.models import REFERRER_KEY_MAX, Click, ClickDaily, Link, ReferrerDaily, User
 from app.qrcodes import MAX_BOX_SIZE, MEDIA_TYPES, MIN_BOX_SIZE, QrFormat
-from app.ratelimit import enforce_limit
 from app.rollup import day_start, today_utc, utc_day
 from app.schemas import (
     DailyClicks,
@@ -62,8 +61,8 @@ async def create_link(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> LinkOut:
-    await enforce_limit(f"create:{user.id}", settings.create_limit_per_hour)
-    await enforce_limit(f"create:ip:{client_ip(request)}", settings.create_limit_per_hour * 3)
+    await ratelimit.enforce(ratelimit.link_creation, f"user:{user.id}")
+    await ratelimit.enforce(ratelimit.link_creation_by_address, f"ip:{client_ip(request)}")
     _reject_self_reference(payload.target_url)
 
     if payload.custom_code:

@@ -17,6 +17,9 @@ dependencies = [
     "bcrypt>=4.2",
     "python-multipart>=0.0.17",
     "qrcode[pil]>=8.0",
+    # Pinned to a tag, not a branch: this is the limiter, and it should not change
+    # underneath a deploy. Switches to the PyPI name once the package is published.
+    "redlimit @ git+https://github.com/Nappuccino-tlg/redlimit@v0.1.0",
 ]
 
 [project.optional-dependencies]

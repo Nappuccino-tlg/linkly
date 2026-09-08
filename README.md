@@ -290,6 +290,11 @@ and on the email at once: per-IP alone lets one attacker spread guesses for a si
 account across a botnet, and per-email alone lets one host walk a password list through a
 set of accounts. Neither is much use without the other.
 
+That limiter used to live in this repository, and getting it right here meant getting it
+right in exactly one place while everyone else repeated the same mistakes. It is now
+[redlimit](https://github.com/Nappuccino-tlg/redlimit), and `app/ratelimit.py` is the
+four limiters this application wants plus the 429 it answers with.
+
 **`X-Forwarded-For` is a request header like any other.** Anyone talking to the app
 directly can put whatever they like in it, and this value keys the per-IP rate limit and
 seeds the unique-visitor hash — so trusting it unconditionally hands both away, since a

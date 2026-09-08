@@ -95,9 +95,9 @@ async def test_delete_removes_the_link(auth_client):
 
 
 async def test_create_is_rate_limited(auth_client, monkeypatch):
-    from app.routers import links
+    from app import ratelimit
 
-    monkeypatch.setattr(links.settings, "create_limit_per_hour", 2)
+    monkeypatch.setattr(ratelimit.link_creation, "limit", 2)
 
     for _ in range(2):
         response = await auth_client.post("/api/links", json={"target_url": "https://example.com"})
