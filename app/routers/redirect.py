@@ -6,7 +6,7 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app import cache
+from app import cache, live
 from app.db import SessionFactory, get_session
 from app.deps import client_ip
 from app.models import Click, Link
@@ -22,22 +22,30 @@ GONE = HTTPException(status_code=status.HTTP_410_GONE, detail="Link has expired"
 
 
 async def record_click(
-    link_id: uuid.UUID, referrer: str | None, user_agent: str | None, ip_hash: str | None
+    link_id: uuid.UUID,
+    code: str,
+    referrer: str | None,
+    user_agent: str | None,
+    ip_hash: str | None,
 ) -> None:
     """Runs after the response is sent, so analytics never slow down a redirect.
 
     Opens its own session: the request-scoped one is already closed by this point.
     """
     async with SessionFactory() as session:
-        session.add(
-            Click(
-                link_id=link_id,
-                referrer=referrer[:REFERRER_MAX_LEN] if referrer else None,
-                user_agent=user_agent[:USER_AGENT_MAX_LEN] if user_agent else None,
-                ip_hash=ip_hash,
-            )
+        click = Click(
+            link_id=link_id,
+            referrer=referrer[:REFERRER_MAX_LEN] if referrer else None,
+            user_agent=user_agent[:USER_AGENT_MAX_LEN] if user_agent else None,
+            ip_hash=ip_hash,
         )
+        session.add(click)
         await session.commit()
+        clicked_at = click.clicked_at
+
+    # After the commit, never before: a dashboard must not be told about a click that a
+    # rolled-back transaction then takes away.
+    await live.publish_click(code, clicked_at, referrer)
 
 
 async def _resolve(code: str, session: AsyncSession) -> cache.CachedLink:
@@ -74,6 +82,7 @@ async def follow(
     background.add_task(
         record_click,
         resolved.id,
+        code,
         request.headers.get("referer"),
         request.headers.get("user-agent"),
         hash_ip(client_ip(request)),

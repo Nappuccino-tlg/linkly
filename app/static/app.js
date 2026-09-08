@@ -56,6 +56,7 @@ function show(view) {
 }
 
 function signOut() {
+  stopWatching();
   token = null;
   localStorage.removeItem(TOKEN_KEY);
   $("detail").classList.add("hidden");
@@ -151,6 +152,7 @@ async function toggle(code, isActive) {
 
 async function remove(code) {
   if (!confirm("Delete " + code + "? Anyone holding the short link will get a 404.")) return;
+  stopWatching();
   await api("/links/" + code, { method: "DELETE" });
   $("detail").classList.add("hidden");
   await loadLinks();
@@ -171,9 +173,10 @@ async function loadLinks() {
   page.items.forEach((link) => container.appendChild(linkRow(link)));
 }
 
-function number(value, label) {
+function number(value, label, id) {
   const cell = document.createElement("div");
   const strong = document.createElement("b");
+  if (id) strong.id = id;
   strong.textContent = value;
   const caption = document.createElement("span");
   caption.textContent = label;
@@ -194,11 +197,14 @@ async function showStats(code) {
   const numbers = document.createElement("div");
   numbers.className = "numbers";
   numbers.append(
-    number(stats.total_clicks, "clicks"),
+    number(stats.total_clicks, "clicks", "live-total"),
     number(stats.unique_visitors, "unique visitors"),
     number(stats.daily.length, "active days")
   );
   panel.appendChild(numbers);
+
+  panel.appendChild(liveFeed());
+  watchClicks(code);
 
   if (stats.daily.length) {
     const peak = Math.max.apply(
@@ -222,6 +228,7 @@ async function showStats(code) {
   } else {
     const empty = document.createElement("p");
     empty.className = "muted";
+    empty.id = "no-clicks";
     empty.textContent = "No clicks yet. Open the short link and come back.";
     panel.appendChild(empty);
   }
@@ -241,7 +248,81 @@ async function showStats(code) {
   }
 }
 
+// -- the live click feed --------------------------------------------------------------
+//
+// One WebSocket while a link's stats are on screen. The token goes in the first message
+// rather than the query string, because query strings end up in access logs and in the
+// Referer of anything the page opens next -- see app/routers/live.py.
+
+let liveSocket = null;
+
+function stopWatching() {
+  if (!liveSocket) return;
+  // Drop the handlers first: closing on purpose must not look like the connection
+  // dropping, or every navigation would flash "reconnecting" at the user.
+  liveSocket.onclose = null;
+  liveSocket.onmessage = null;
+  liveSocket.close();
+  liveSocket = null;
+}
+
+function liveFeed() {
+  const box = document.createElement("div");
+  box.className = "live";
+
+  const dot = document.createElement("span");
+  dot.className = "dot";
+  dot.id = "live-dot";
+
+  const label = document.createElement("span");
+  label.id = "live-label";
+  label.textContent = "Connecting…";
+
+  box.append(dot, label);
+  return box;
+}
+
+function liveStatus(state, text) {
+  const dot = $("live-dot");
+  const label = $("live-label");
+  if (!dot || !label) return;
+  dot.className = "dot " + state;
+  label.textContent = text;
+}
+
+function onClick(event) {
+  const total = $("live-total");
+  if (total) total.textContent = Number(total.textContent) + 1;
+
+  // The panel was drawn from a snapshot taken before this click existed. Leaving its
+  // empty state up would have it insisting there are no clicks directly underneath a
+  // counter that just moved.
+  const empty = $("no-clicks");
+  if (empty) empty.remove();
+
+  const at = new Date(event.at).toLocaleTimeString();
+  liveStatus("on", event.referrer ? "Click at " + at + " from " + event.referrer : "Click at " + at);
+}
+
+function watchClicks(code) {
+  stopWatching();
+  const scheme = location.protocol === "https:" ? "wss://" : "ws://";
+  const socket = new WebSocket(scheme + location.host + "/api/links/" + code + "/live");
+  liveSocket = socket;
+
+  socket.onopen = () => {
+    socket.send(token);
+    liveStatus("on", "Watching for clicks…");
+  };
+  socket.onmessage = (message) => onClick(JSON.parse(message.data));
+  socket.onclose = () => {
+    // Only report a close that was not asked for: stopWatching clears this handler.
+    if (liveSocket === socket) liveStatus("off", "Live updates disconnected");
+  };
+}
+
 async function showQr(code) {
+  stopWatching();
   // The QR endpoint is owner-only, so an <img src> cannot fetch it -- there is no way to
   // attach the bearer token to an image request. Fetch it as a blob instead.
   const response = await fetch("/api/links/" + code + "/qr?box_size=6", {

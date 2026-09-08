@@ -148,3 +148,16 @@ td:last-child { text-align: right; color: var(--muted); }
 .muted { color: var(--muted); font-size: 0.9rem; }
 .hidden { display: none; }
 img.qr { width: 180px; height: 180px; image-rendering: pixelated; background: #fff; border-radius: 6px; }
+
+/* The live click feed. The dot is the whole status indicator: green and breathing while
+   the socket is open, grey once it is not. */
+.live { display: flex; align-items: center; gap: 0.5rem; margin: 0 0 1rem; font-size: 0.85rem; color: var(--muted); }
+.live .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--border); flex: none; }
+.live .dot.on { background: var(--accent); animation: pulse 2s ease-in-out infinite; }
+.live .dot.off { background: var(--danger); }
+
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+/* Someone who asked for less movement gets a steady dot rather than none: the colour is
+   the information, the animation only draws the eye to it. */
+@media (prefers-reduced-motion: reduce) { .live .dot.on { animation: none; } }

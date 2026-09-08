@@ -29,6 +29,9 @@ flowchart LR
     API -->|2. 307| V
     API -.->|3. after response| BG[Background task]
     BG --> PG
+    BG -.->|4. publish| R
+    R -.->|fan out| WS["WS /api/links/{code}/live"]
+    WS -.-> U
 
     U([Owner]) -->|POST /api/links| API
     U -->|GET /stats| API
@@ -42,6 +45,8 @@ The redirect path is the hot path, so it is the one that got the attention:
    click never reaches the server. Analytics would count one click and stop.
 3. **Clicks are written after the response is sent**, in a background task with its own
    database session. A slow analytics insert can never slow down a redirect.
+4. **Then, and only then, the click is announced** on Redis pub/sub, so a dashboard on any
+   instance sees it immediately. See [the live click feed](#the-live-click-feed).
 
 ## API
 
@@ -57,6 +62,7 @@ The redirect path is the hot path, so it is the one that got the attention:
 | `DELETE` | `/api/links/{code}` | Delete a link and invalidate its cache entry |
 | `GET` | `/api/links/{code}/stats` | Clicks, visitors, daily buckets, top referrers |
 | `GET` | `/api/links/{code}/qr` | QR code for the short link, as PNG or SVG |
+| `WS` | `/api/links/{code}/live` | Clicks on one link, streamed as they happen |
 | `GET` | `/{code}` | The redirect itself |
 | `GET` | `/healthz` · `/readyz` | Liveness, and readiness that checks Postgres and Redis |
 | `GET` | `/app/` | The dashboard |
@@ -74,6 +80,60 @@ same public endpoints anyone else would. Nothing is exposed to it that is not al
 documented at `/docs`. The one place that shape shows through is the QR code — the
 endpoint is owner-only, so an `<img src>` cannot fetch it (there is no way to attach a
 bearer token to an image request) and the page fetches it as a blob instead.
+
+## The live click feed
+
+Open a link's stats and the counter moves on its own -- a click recorded anywhere reaches
+the dashboard watching it, without a reload and without polling.
+
+```
+WS /api/links/{code}/live
+-> the bearer token, as the first message
+<- {"code": "live-demo", "at": "2026-09-08T18:00:59Z", "referrer": "news.ycombinator.com"}
+```
+
+The token goes in the first message rather than `?token=`, because query strings end up in
+access logs, in proxy logs, and in the `Referer` of anything the page opens next. One
+extra round trip buys a credential that is never written down.
+
+Only the referrer's **host** is sent. A full `Referer` is a URL on somebody else's site and
+can carry a path and query that were never meant to travel -- a search term, a session id,
+an unlisted page. "Where is this traffic coming from" is the whole question, and the host
+is all of the answer.
+
+### Why this needs a broker at all
+
+The click is recorded by whichever instance served the redirect. The dashboard waiting for
+it is connected to whichever instance the load balancer picked. Those are the same process
+only by luck, and a dictionary of open sockets is wrong on every instance but the lucky one
+-- silently, and only once there is more than one worker.
+
+So it goes through Redis pub/sub. The usual way to do that gives every WebSocket its own
+Redis subscription, which works right up to the scale where broadcasting was worth doing:
+a thousand open dashboards become a thousand Redis connections.
+
+[**hubcast**](https://github.com/Nappuccino-tlg/hubcast) holds **one** Redis connection per
+instance however many dashboards are attached. It subscribes to a channel when a link gains
+its first local watcher and drops it when it loses its last, which is visible from the
+outside:
+
+```console
+$ redis-cli pubsub channels 'linkly:*'
+linkly:link:fresh      # somebody has this link's stats open
+linkly:__hub__         # the keepalive; see hubcast's README
+
+$ # ... they close the panel ...
+$ redis-cli pubsub channels 'linkly:*'
+linkly:__hub__
+```
+
+A subscriber that falls behind drops its oldest queued message rather than the newest,
+because this is a counter and not a log: the number as it is now is the true one, and
+replaying a stale backlog at a dashboard would only show it the past.
+
+The feed is best effort, on purpose. The click is committed to Postgres before anything is
+published, so a Redis that is down costs a live update and nothing else -- a redirect must
+not fail, or even log a stack trace, because a cosmetic feed could not be delivered.
 
 ## Keeping stats fast
 
@@ -326,6 +386,7 @@ otherwise someone could claim `/docs` and take out the API documentation.
 - [x] Repoint or disable a link without changing its code
 - [x] Dashboard at `/app/`, no build step
 - [x] Aggregate click rollups so stats stay fast past a few million rows
+- [x] Live click feed over WebSockets, fanned out across instances with hubcast
 - [ ] Resolve-then-pin at redirect time, so a hostname cannot resolve somewhere private
 
 ## Contributing

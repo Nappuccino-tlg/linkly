@@ -7,11 +7,12 @@ from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 
-from app import errors
+from app import errors, live
 from app.cache import redis
 from app.db import SessionFactory
 from app.observability import RequestContextMiddleware, configure_logging
 from app.routers import auth, links, redirect
+from app.routers import live as live_router
 
 STATIC_DIR = Path(__file__).parent / "static"
 
@@ -19,7 +20,11 @@ STATIC_DIR = Path(__file__).parent / "static"
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     configure_logging()
+    # Before any request can subscribe, and stopped before the connection it borrows is
+    # closed underneath it.
+    await live.hub.start()
     yield
+    await live.hub.stop()
     await redis.aclose()
 
 
@@ -86,6 +91,7 @@ def create_app() -> FastAPI:
 
     app.include_router(auth.router)
     app.include_router(links.router)
+    app.include_router(live_router.router)
 
     # The dashboard is plain HTML, CSS and one script -- no build step, no bundler, and
     # nothing to install. It talks to the same public API as any other client would.

@@ -18,6 +18,7 @@ dependencies = [
     "python-multipart>=0.0.17",
     "qrcode[pil]>=8.0",
     "redlimit>=0.1",
+    "hubcast[redis]>=0.1",
 ]
 
 [project.optional-dependencies]
