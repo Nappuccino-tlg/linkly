@@ -6,7 +6,10 @@ requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.115",
     "uvicorn[standard]>=0.32",
-    "sqlalchemy>=2.0.36",
+    # The asyncio extra, not plain sqlalchemy: it is what pulls in greenlet, which
+    # every async engine needs. 2.0 happened to install greenlet anyway, so this
+    # worked undeclared until 2.1 stopped doing that and every install broke at once.
+    "sqlalchemy[asyncio]>=2.0.36",
     "asyncpg>=0.30",
     "alembic>=1.14",
     "pydantic>=2.9",
