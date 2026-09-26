@@ -1,5 +1,7 @@
 # Keep this in step with the version in ci.yml and requires-python in pyproject.toml.
-FROM python:3.12-slim AS builder
+# The matrix there builds and runs this image on every change, so this line moving is
+# something CI proves rather than something a deploy discovers.
+FROM python:3.14-slim AS builder
 
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1 PYTHONDONTWRITEBYTECODE=1
 WORKDIR /build
@@ -9,7 +11,7 @@ COPY app ./app
 RUN python -m venv /opt/venv && /opt/venv/bin/pip install --no-cache-dir .
 
 
-FROM python:3.12-slim AS runtime
+FROM python:3.14-slim AS runtime
 
 ENV PATH="/opt/venv/bin:$PATH" PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
 WORKDIR /app

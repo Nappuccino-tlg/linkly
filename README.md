@@ -7,7 +7,7 @@ sit in the request path.
 Built with FastAPI, PostgreSQL and Redis, with a dashboard on top of the public API.
 
 [![CI](https://github.com/Nappuccino-tlg/linkly/actions/workflows/ci.yml/badge.svg)](https://github.com/Nappuccino-tlg/linkly/actions/workflows/ci.yml)
-![Python](https://img.shields.io/badge/python-3.12-blue)
+![Python](https://img.shields.io/badge/python-3.12%20--%203.14-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 [![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/Nappuccino-tlg/linkly)
 
