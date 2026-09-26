@@ -4,6 +4,14 @@ on:
   push:
     branches: [main]
   pull_request:
+  schedule:
+    # Nothing in this repository changed on 26 September and everything broke anyway:
+    # SQLAlchemy 2.1 was released and stopped installing greenlet. main had been red
+    # for four days before anybody looked, which for a project whose visitors arrive
+    # one at a time is four days of the only impression it gets to make.
+    #
+    # A daily build resolves dependencies fresh and finds that the morning after.
+    - cron: "17 6 * * *"
 
 jobs:
   test:
