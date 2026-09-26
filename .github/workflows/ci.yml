@@ -20,10 +20,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # 3.12 is what the Dockerfile ships, so it is the one that has to stay green.
-        # 3.14 is there to find out whether the base image can move before the base image
-        # moves -- Dependabot offered that bump and it would have changed what runs in
-        # production without changing what CI proves.
+        # 3.14 is what the Dockerfile ships. 3.12 is the floor in requires-python, kept
+        # here so `pip install linkly` stays honest for anyone not on the newest Python.
+        #
+        # The order used to be the other way round: 3.12 shipped and 3.14 was the probe,
+        # added because Dependabot offered the base image bump and nothing in CI could
+        # say whether it was safe. It could, in the end -- the quickstart job builds the
+        # image and runs it, so the answer stopped being a guess.
         python-version: ["3.12", "3.14"]
 
     services:
